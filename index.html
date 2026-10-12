@@ -69,8 +69,8 @@
 <body>
 
     <div class="sync-bar">
-        <span>ルーム状態</span>
-        <button onclick="loadState(); renderCurrentScreen();" style="background: #20b2aa; padding: 6px 16px; font-size: 14px;">🔄 状態を更新（同期）</button>
+        <span>ルーム状態（高速自動同期中: 0.5秒毎）</span>
+        <button onclick="manualSync()" style="background: #20b2aa; padding: 6px 16px; font-size: 14px;">🔄 今すぐ手動更新</button>
     </div>
 
     <h1>Discord ito ツール</h1>
@@ -153,6 +153,11 @@
         if(saved) {
             state = JSON.parse(saved);
         }
+    }
+
+    function manualSync() {
+        loadState();
+        renderCurrentScreen();
     }
 
     function joinGame() {
@@ -240,6 +245,7 @@
 
     function renderCurrentScreen() {
         loadState();
+        
         document.getElementById("login-screen").classList.add("hidden");
         document.getElementById("lobby-screen").classList.add("hidden");
         document.getElementById("game-screen").classList.add("hidden");
@@ -263,7 +269,14 @@
                 document.getElementById("dealer-input-area").classList.add("hidden");
             }
 
-            renderMyHands();
+            if(!window.myAssignedNumbers || window.myAssignedNumbers.length === 0) {
+                window.myAssignedNumbers = [50];
+            }
+            
+            const container = document.getElementById("my-hands-container");
+            if(container.children.length === 0) {
+                renderMyHands();
+            }
         } else if(state.phase === "field") {
             document.getElementById("field-screen").classList.remove("hidden");
             document.getElementById("field-theme-title").innerText = "お題: " + (state.theme || "（未設定）");
@@ -274,10 +287,6 @@
     function renderMyHands() {
         const container = document.getElementById("my-hands-container");
         container.innerHTML = "";
-        
-        if(!window.myAssignedNumbers || window.myAssignedNumbers.length === 0) {
-            window.myAssignedNumbers = [50]; 
-        }
 
         window.myAssignedNumbers.forEach((num, index) => {
             if(!window.myInputValues[index]) {
@@ -400,6 +409,24 @@
         renderCurrentScreen();
     }
 
+    // ── 0.5秒に1回の高速バックグラウンド同期 ──
+    setInterval(() => {
+        if(state.phase === "lobby" || state.phase === "field") {
+            loadState();
+            renderCurrentScreen();
+        } else if(state.phase === "play") {
+            const oldTheme = state.theme;
+            loadState();
+            if(state.theme !== oldTheme) {
+                const themeDisplay = document.getElementById("theme-display");
+                if(themeDisplay) {
+                    themeDisplay.innerText = state.theme ? "お題: " + state.theme : "お題: まだ決まっていません";
+                }
+            }
+        }
+    }, 500);
+
+    // 初回読み込み
     loadState();
     renderCurrentScreen();
 </script>
