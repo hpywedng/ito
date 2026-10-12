@@ -2,7 +2,7 @@
 <html lang="ja">
 <head>
     <meta charset="UTF-8">
-    <title>Discord ito ツール</title>
+    <title>Discord ito オンライン</title>
     <style>
         :root {
             --bg-color: #f4fbfb;
@@ -83,20 +83,25 @@
         .move-btns button { padding: 5px 10px; font-size: 14px; background: #7f8c8d; }
         .move-btns button:hover { background: #595f61; }
         .sync-bar { background: var(--primary); padding: 10px 15px; border-radius: 8px; margin-bottom: 15px; display: flex; justify-content: space-between; align-items: center; color: #1a252f; font-weight: bold; border: 1px solid #85e3e3; }
+        .status-msg { font-size: 12px; color: #555; margin-left: 10px; }
     </style>
 </head>
 <body>
 
     <div class="sync-bar">
-        <span>ルーム状態（自動同期中）</span>
-        <button onclick="manualSync()" style="background: #20b2aa; padding: 6px 16px; font-size: 14px;">🔄 今すぐ手動更新</button>
+        <div>
+            <span>接続状態: <span id="connection-status" style="color: #006666;">接続中</span></span>
+            <span id="sync-status" class="status-msg">● 待機中</span>
+        </div>
+        <button onclick="cloudSync(true)" style="background: #20b2aa; padding: 6px 16px; font-size: 14px;">🔄 手動同期</button>
     </div>
 
-    <h1>Discord ito ツール</h1>
+    <h1>Discord ito オンライン</h1>
 
-    <!-- 1. ログイン画面 -->
+    <!-- 1. ログイン画面（ルームIDなし） -->
     <div id="login-screen" class="card">
         <h2>参加設定</h2>
+        <p style="font-size: 14px; color: #555;">ハンドルネームを入力するだけで、自動的にみんなの部屋に参加できます。</p>
         <div class="flex">
             <input type="text" id="player-name-input" placeholder="ハンドルネームを入力" value="プレイヤーネーム">
             <button onclick="joinGame()" style="background: #20b2aa;">入室する</button>
@@ -109,7 +114,6 @@
         <p>参加メンバー: <span id="player-list"></span></p>
         <div class="flex">
             <button onclick="leaveGame()" style="background: #e74c3c; font-size: 14px;">🚪 退室する</button>
-            <button onclick="clearAllPlayers()" style="background: #95a5a6; font-size: 14px;">🧹 リストをクリア（全員退室）</button>
         </div>
         <hr style="border:0; border-top:1px solid #d1e7e7; margin: 15px 0;">
         <h3>ゲーム設定</h3>
@@ -153,7 +157,9 @@
     </div>
 
 <script>
-    const ROOM_KEY = "discord_ito_game_state_v3";
+    // 全員共通の固定ルームID（お仲間内専用の共有スペース）
+    const API_BASE = "https://api.npoint.io/";
+    const ROOM_ID = "discord-ito-family-shared-room-v1";
 
     let state = {
         players: [],
@@ -166,69 +172,87 @@
     window.myInputValues = {}; 
     window.myCurrentName = "";
     window.myAssignedNumbers = [];
+    let isSyncing = false;
 
-    function saveState() {
-        localStorage.setItem(ROOM_KEY, JSON.stringify(state));
-    }
+    // クラウドから状態を取得する（GET）
+    async function cloudSync(isManual = false) {
+        if (isSyncing) return;
+        isSyncing = true;
+        
+        const statusEl = document.getElementById("sync-status");
+        if(statusEl) statusEl.innerText = "● 同期中...";
 
-    function loadState() {
-        const saved = localStorage.getItem(ROOM_KEY);
-        if(saved) {
-            state = JSON.parse(saved);
+        try {
+            const res = await fetch(`${API_BASE}${ROOM_ID}`);
+            if (res.ok) {
+                const cloudState = await res.json();
+                if (cloudState && cloudState.phase) {
+                    state = cloudState;
+                    renderCurrentScreen();
+                }
+            }
+            if(statusEl) statusEl.innerText = "● 同期完了";
+        } catch (e) {
+            console.log("同期スキップまたはオフライン", e);
+            if(statusEl) statusEl.innerText = "● オフライン";
+        } finally {
+            isSyncing = false;
         }
     }
 
-    function manualSync() {
-        loadState();
-        renderCurrentScreen();
+    // クラウドへ状態を保存する（POST）
+    async function pushState() {
+        const statusEl = document.getElementById("sync-status");
+        if(statusEl) statusEl.innerText = "● 保存中...";
+
+        try {
+            await fetch(`${API_BASE}${ROOM_ID}`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(state)
+            });
+            if(statusEl) statusEl.innerText = "● 保存完了";
+        } catch (e) {
+            console.error("保存失敗", e);
+            if(statusEl) statusEl.innerText = "● 保存失敗";
+        }
     }
 
     function joinGame() {
-        loadState();
         const nameInput = document.getElementById("player-name-input").value.trim();
         if(!nameInput) return alert("名前を入力してください");
         
         window.myCurrentName = nameInput;
-        if(!state.players.includes(nameInput)) {
-            state.players.push(nameInput);
-        }
-        saveState();
-        renderCurrentScreen();
+
+        // まず現在の最新状態を取得してから自分の名前を追加
+        cloudSync(true).then(() => {
+            if(!state.players.includes(nameInput)) {
+                state.players.push(nameInput);
+            }
+            pushState();
+            renderCurrentScreen();
+        });
     }
 
-    // 明示的な退室処理
     function leaveGame() {
-        loadState();
         if(window.myCurrentName) {
             state.players = state.players.filter(p => p !== window.myCurrentName);
             window.myCurrentName = "";
-            saveState();
+            pushState();
         }
         renderCurrentScreen();
     }
 
-    // 特定プレイヤーの削除（キック）
     function removePlayer(name) {
-        loadState();
         state.players = state.players.filter(p => p !== name);
         if(window.myCurrentName === name) {
             window.myCurrentName = "";
         }
-        saveState();
-        renderCurrentScreen();
-    }
-
-    // プレイヤーリストの一括クリア
-    function clearAllPlayers() {
-        loadState();
-        state.players = [];
-        window.myCurrentName = "";
-        saveState();
+        pushState();
         renderCurrentScreen();
     }
 
     function startGame() {
-        loadState();
         const count = parseInt(document.getElementById("card-count").value);
         const dealerMode = document.getElementById("dealer-mode").value;
         
@@ -248,20 +272,19 @@
         window.myAssignedNumbers.sort((a,b) => a - b);
 
         window.myInputValues = {};
-
         state.theme = "";
         state.allSubmissions = [];
         state.phase = "play";
-        saveState();
+        
+        pushState();
         renderCurrentScreen();
     }
 
     function setTheme() {
-        loadState();
         const theme = document.getElementById("theme-input").value.trim();
         if(!theme) return alert("お題を入力してください");
         state.theme = theme;
-        saveState();
+        pushState();
         renderCurrentScreen();
     }
 
@@ -273,7 +296,6 @@
     }
 
     function submitHands() {
-        loadState();
         let items = [];
         window.myAssignedNumbers.forEach((num, index) => {
             const wordInput = document.getElementById(`word-${index}`);
@@ -293,13 +315,11 @@
         }
 
         state.phase = "field";
-        saveState();
+        pushState();
         renderCurrentScreen();
     }
 
     function renderCurrentScreen() {
-        loadState();
-        
         document.getElementById("login-screen").classList.add("hidden");
         document.getElementById("lobby-screen").classList.add("hidden");
         document.getElementById("game-screen").classList.add("hidden");
@@ -308,8 +328,6 @@
         if(state.phase === "lobby") {
             if(window.myCurrentName && state.players.includes(window.myCurrentName)) {
                 document.getElementById("lobby-screen").classList.remove("hidden");
-                
-                // プレイヤーリストを削除ボタン付きのバッジで描写
                 const listContainer = document.getElementById("player-list");
                 listContainer.innerHTML = "";
                 state.players.forEach(p => {
@@ -417,7 +435,6 @@
     }
 
     function moveCardItem(flatIndex, direction) {
-        loadState();
         let flatCards = [];
         state.allSubmissions.forEach((sub) => {
             sub.items.forEach((item) => {
@@ -439,19 +456,17 @@
             }
         });
 
-        saveState();
+        pushState();
         renderField();
     }
 
     function toggleReveal(subIdx, itemIdx) {
-        loadState();
         state.allSubmissions[subIdx].items[itemIdx].revealed = !state.allSubmissions[subIdx].items[itemIdx].revealed;
-        saveState();
+        pushState();
         renderField();
     }
 
     function nextPhase() {
-        loadState();
         const btn = document.getElementById("phase-btn");
         if(btn.innerText.includes("結果発表")) {
             state.allSubmissions.forEach(sub => {
@@ -468,39 +483,19 @@
             btn.innerText = "結果発表へ進む";
             btn.style.background = "var(--accent)";
         }
-        saveState();
+        pushState();
         renderCurrentScreen();
     }
 
-    // タブを閉じたとき・ページを離れたときにリストから自動退室
-    window.addEventListener("beforeunload", () => {
-        if(window.myCurrentName) {
-            loadState();
-            state.players = state.players.filter(p => p !== window.myCurrentName);
-            saveState();
-        }
-    });
-
-    // ── 0.5秒に1回の自動同期 ──
+    // ── 60秒に1回の定期自動同期 ──
     setInterval(() => {
-        if(state.phase === "lobby" || state.phase === "field") {
-            loadState();
-            renderCurrentScreen();
-        } else if(state.phase === "play") {
-            const oldTheme = state.theme;
-            loadState();
-            if(state.theme !== oldTheme) {
-                const themeDisplay = document.getElementById("theme-display");
-                if(themeDisplay) {
-                    themeDisplay.innerText = state.theme ? "お題: " + state.theme : "お題: まだ決まっていません";
-                }
-            }
+        if (window.myCurrentName) {
+            cloudSync(false);
         }
-    }, 500);
+    }, 60000);
 
-    // 初回読み込み
-    loadState();
-    renderCurrentScreen();
+    // 初回起動時に最新状態をバックグラウンドで取得
+    cloudSync(true);
 </script>
 
 </body>
