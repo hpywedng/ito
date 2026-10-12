@@ -1,0 +1,408 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <title>Discord ito ツール</title>
+    <style>
+        :root {
+            --bg-color: #f4fbfb;
+            --card-bg: #ffffff;
+            --text-color: #2c3e50;
+            --primary: #afeeee; /* paleturquoise */
+            --accent: #e4fbe4;  /* 白っぽく柔らかいパステルグリーン */
+            --accent-border: #b8ebd0;
+            --border-color: #b2d8d8;
+        }
+
+        body { 
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; 
+            background: var(--bg-color); 
+            color: var(--text-color); 
+            margin: 0; 
+            padding: 20px; 
+        }
+        h1, h2, h3 { color: #1a252f; }
+        .card { 
+            background: var(--card-bg); 
+            border-radius: 12px; 
+            padding: 20px; 
+            margin-bottom: 20px; 
+            box-shadow: 0 4px 12px rgba(175, 238, 238, 0.25); 
+            border: 1px solid var(--border-color);
+        }
+        input, select, button { 
+            padding: 10px; 
+            margin: 5px 0; 
+            border-radius: 6px; 
+            border: 1px solid var(--border-color); 
+            background: #fafdfd; 
+            color: #2c3e50; 
+            font-size: 16px; 
+        }
+        input:focus { outline: none; border-color: #5cacac; background: #fff; }
+        button { background: #5cacac; color: #fff; cursor: pointer; border: none; font-weight: bold; transition: background 0.2s; }
+        button:hover { background: #458b8b; }
+        .hidden { display: none !important; }
+        .flex { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+        
+        /* 場のカード一覧 */
+        #field-container { display: flex; gap: 15px; flex-wrap: wrap; margin-top: 15px; }
+        .field-card { 
+            background: #ffffff; 
+            border: 2px solid var(--primary); 
+            border-radius: 10px; 
+            padding: 15px; 
+            width: 220px; 
+            text-align: center; 
+            position: relative; 
+            box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+        }
+        .field-card img { width: 100%; height: 130px; object-fit: cover; border-radius: 6px; background: #e0f8f8; margin-top: 8px; }
+        .number-badge { font-size: 24px; font-weight: bold; color: #27ae60; background: var(--accent); padding: 5px 10px; border-radius: 6px; display: inline-block; margin-top: 5px; cursor: pointer; border: 1px solid var(--accent-border); }
+        .hidden-num { font-size: 18px; font-weight: bold; color: #7f8c8d; background: #ecf0f1; padding: 5px 10px; border-radius: 6px; display: inline-block; margin-top: 5px; }
+        .move-btns { margin-top: 8px; display: flex; justify-content: space-between; }
+        .move-btns button { padding: 5px 10px; font-size: 14px; background: #7f8c8d; }
+        .move-btns button:hover { background: #595f61; }
+        .sync-bar { background: var(--primary); padding: 10px 15px; border-radius: 8px; margin-bottom: 15px; display: flex; justify-content: space-between; align-items: center; color: #1a252f; font-weight: bold; border: 1px solid #85e3e3; }
+    </style>
+</head>
+<body>
+
+    <div class="sync-bar">
+        <span>ルーム状態</span>
+        <button onclick="loadState(); renderCurrentScreen();" style="background: #20b2aa; padding: 6px 16px; font-size: 14px;">🔄 状態を更新（同期）</button>
+    </div>
+
+    <h1>Discord ito ツール</h1>
+
+    <!-- 1. ログイン画面 -->
+    <div id="login-screen" class="card">
+        <h2>参加設定</h2>
+        <div class="flex">
+            <input type="text" id="player-name-input" placeholder="ハンドルネームを入力" value="プレイヤーネーム">
+            <button onclick="joinGame()" style="background: #20b2aa;">入室する</button>
+        </div>
+    </div>
+
+    <!-- 2. ロビー・準備画面 -->
+    <div id="lobby-screen" class="card hidden">
+        <h2>ロビー</h2>
+        <p>参加メンバー: <span id="player-list" style="font-weight: bold; color: #20b2aa;"></span></p>
+        <hr style="border:0; border-top:1px solid #d1e7e7; margin: 15px 0;">
+        <h3>ゲーム設定</h3>
+        <label>親の決め方: 
+            <select id="dealer-mode">
+                <option value="order">順番通り</option>
+                <option value="random">ランダム</option>
+            </select>
+        </label><br>
+        <label>手札の枚数（難易度）: 
+            <select id="card-count">
+                <option value="1">1枚（標準）</option>
+                <option value="2">2枚（高難易度）</option>
+                <option value="3">3枚（激ムズ）</option>
+            </select>
+        </label><br><br>
+        <button onclick="startGame()" style="background: var(--accent); color: #2c3e50; border: 1px solid var(--accent-border);">準備完了 / ゲーム開始</button>
+    </div>
+
+    <!-- 3. ゲームプレイ画面 -->
+    <div id="game-screen" class="card hidden">
+        <h2 id="theme-display" style="color: #008b8b;">お題: まだ決まっていません</h2>
+        <div id="dealer-input-area" class="hidden" style="background: #e0f8f8; padding: 15px; border-radius: 8px; margin-bottom: 15px; border: 1px solid var(--primary);">
+            <h3>【親権者用】お題入力</h3>
+            <input type="text" id="theme-input" placeholder="お題を入力してください（例：コンビニといえば？）" style="width: 70%;">
+            <button onclick="setTheme()" style="background: #20b2aa;">お題を決定する</button>
+        </div>
+        <hr style="border:0; border-top:1px solid #d1e7e7; margin: 15px 0;">
+        <h3>あなたの手札・解答入力</h3>
+        <div id="my-hands-container"></div>
+        <button onclick="submitHands()" style="background: var(--accent); color: #2c3e50; margin-top: 15px; width: 100%; padding: 12px; font-size: 18px; border: 1px solid var(--accent-border);">場に提出する</button>
+    </div>
+
+    <!-- 4. 会議・結果発表画面 -->
+    <div id="field-screen" class="card hidden">
+        <h2 id="field-theme-title" style="color: #008b8b;">お題: </h2>
+        <p>左右のボタンで並び順を調整してください。全員納得したら「結果発表へ」を押します。</p>
+        <div id="field-container"></div>
+        <br>
+        <button id="phase-btn" onclick="nextPhase()" style="background: var(--accent); color: #2c3e50; padding: 12px 24px; font-size: 18px; border: 1px solid var(--accent-border); font-weight: bold;">結果発表へ進む</button>
+    </div>
+
+<script>
+    const ROOM_KEY = "discord_ito_game_state_v3";
+
+    let state = {
+        players: [],
+        dealerIndex: 0,
+        theme: "",
+        allSubmissions: [], 
+        phase: "lobby" 
+    };
+
+    window.myInputValues = {}; 
+    window.myCurrentName = "";
+    window.myAssignedNumbers = [];
+
+    function saveState() {
+        localStorage.setItem(ROOM_KEY, JSON.stringify(state));
+    }
+
+    function loadState() {
+        const saved = localStorage.getItem(ROOM_KEY);
+        if(saved) {
+            state = JSON.parse(saved);
+        }
+    }
+
+    function joinGame() {
+        loadState();
+        const nameInput = document.getElementById("player-name-input").value.trim();
+        if(!nameInput) return alert("名前を入力してください");
+        
+        window.myCurrentName = nameInput;
+        if(!state.players.includes(nameInput)) {
+            state.players.push(nameInput);
+        }
+        saveState();
+        renderCurrentScreen();
+    }
+
+    function startGame() {
+        loadState();
+        const count = parseInt(document.getElementById("card-count").value);
+        const dealerMode = document.getElementById("dealer-mode").value;
+        
+        if(dealerMode === "random") {
+            state.dealerIndex = Math.floor(Math.random() * state.players.length);
+        } else {
+            state.dealerIndex = (state.dealerIndex + 1) % state.players.length;
+        }
+
+        let numbers = Array.from({length: 100}, (_, i) => i + 1);
+        numbers.sort(() => Math.random() - 0.5);
+        
+        window.myAssignedNumbers = [];
+        for(let i=0; i<count; i++) {
+            window.myAssignedNumbers.push(numbers.pop());
+        }
+        window.myAssignedNumbers.sort((a,b) => a - b);
+
+        window.myInputValues = {};
+
+        state.theme = "";
+        state.allSubmissions = [];
+        state.phase = "play";
+        saveState();
+        renderCurrentScreen();
+    }
+
+    function setTheme() {
+        loadState();
+        const theme = document.getElementById("theme-input").value.trim();
+        if(!theme) return alert("お題を入力してください");
+        state.theme = theme;
+        saveState();
+        renderCurrentScreen();
+    }
+
+    function updateInputVal(index, key, val) {
+        if(!window.myInputValues[index]) {
+            window.myInputValues[index] = { word: "", imgUrl: "" };
+        }
+        window.myInputValues[index][key] = val;
+    }
+
+    function submitHands() {
+        loadState();
+        let items = [];
+        window.myAssignedNumbers.forEach((num, index) => {
+            const wordInput = document.getElementById(`word-${index}`);
+            const imgUrlInput = document.getElementById(`img-url-${index}`);
+            
+            const word = wordInput ? wordInput.value.trim() : (window.myInputValues[index]?.word || "");
+            const imgUrl = imgUrlInput ? imgUrlInput.value.trim() : (window.myInputValues[index]?.imgUrl || "https://picsum.photos/200/130");
+            
+            items.push({ number: num, word: word, imgUrl: imgUrl || "https://picsum.photos/200/130", revealed: false });
+        });
+
+        const existingIdx = state.allSubmissions.findIndex(s => s.name === window.myCurrentName);
+        if(existingIdx >= 0) {
+            state.allSubmissions[existingIdx].items = items;
+        } else {
+            state.allSubmissions.push({ name: window.myCurrentName, items: items });
+        }
+
+        state.phase = "field";
+        saveState();
+        renderCurrentScreen();
+    }
+
+    function renderCurrentScreen() {
+        loadState();
+        document.getElementById("login-screen").classList.add("hidden");
+        document.getElementById("lobby-screen").classList.add("hidden");
+        document.getElementById("game-screen").classList.add("hidden");
+        document.getElementById("field-screen").classList.add("hidden");
+
+        if(state.phase === "lobby") {
+            if(window.myCurrentName) {
+                document.getElementById("lobby-screen").classList.remove("hidden");
+                document.getElementById("player-list").innerText = state.players.join(", ");
+            } else {
+                document.getElementById("login-screen").classList.remove("hidden");
+            }
+        } else if(state.phase === "play") {
+            document.getElementById("game-screen").classList.remove("hidden");
+            document.getElementById("theme-display").innerText = state.theme ? "お題: " + state.theme : "お題: まだ決まっていません";
+            
+            const isDealer = (state.players[state.dealerIndex] === window.myCurrentName);
+            if(isDealer) {
+                document.getElementById("dealer-input-area").classList.remove("hidden");
+            } else {
+                document.getElementById("dealer-input-area").classList.add("hidden");
+            }
+
+            renderMyHands();
+        } else if(state.phase === "field") {
+            document.getElementById("field-screen").classList.remove("hidden");
+            document.getElementById("field-theme-title").innerText = "お題: " + (state.theme || "（未設定）");
+            renderField();
+        }
+    }
+
+    function renderMyHands() {
+        const container = document.getElementById("my-hands-container");
+        container.innerHTML = "";
+        
+        if(!window.myAssignedNumbers || window.myAssignedNumbers.length === 0) {
+            window.myAssignedNumbers = [50]; 
+        }
+
+        window.myAssignedNumbers.forEach((num, index) => {
+            if(!window.myInputValues[index]) {
+                window.myInputValues[index] = { word: "", imgUrl: "" };
+            }
+            const currentData = window.myInputValues[index];
+
+            const div = document.createElement("div");
+            div.className = "card";
+            div.style.background = "#fafdfd";
+            div.style.border = "1px solid #b2d8d8";
+            div.innerHTML = `
+                <p><strong>数字カード #${index+1}</strong>: <span style="color:#27ae60; font-size:22px; font-weight:bold;">${num}</span></p>
+                <label>答えのワード: <input type="text" id="word-${index}" value="${currentData.word}" placeholder="例：コンビニのコーヒー" oninput="updateInputVal(${index}, 'word', this.value)"></label><br>
+                <label>画像URL: <input type="text" id="img-url-${index}" value="${currentData.imgUrl}" placeholder="https://example.com/image.jpg" style="width: 60%;" oninput="updateInputVal(${index}, 'img-url', this.value); previewImage(${index})"></label>
+                <div id="img-preview-${index}" style="margin-top:8px;">
+                    ${currentData.imgUrl ? `<img src="${currentData.imgUrl}" style="width:120px; height:80px; object-fit:cover; border-radius:6px;" onerror="this.style.display='none';">` : ''}
+                </div>
+            `;
+            container.appendChild(div);
+        });
+    }
+
+    function previewImage(index) {
+        const url = document.getElementById(`img-url-${index}`).value.trim();
+        const preview = document.getElementById(`img-preview-${index}`);
+        if(url) {
+            preview.innerHTML = `<img src="${url}" style="width:120px; height:80px; object-fit:cover; border-radius:6px;" onerror="this.onerror=null; this.src='https://picsum.photos/200/130';">`;
+        } else {
+            preview.innerHTML = "";
+        }
+    }
+
+    function renderField() {
+        const container = document.getElementById("field-container");
+        container.innerHTML = "";
+
+        let flatCards = [];
+        state.allSubmissions.forEach((sub, sIdx) => {
+            sub.items.forEach((item, iIdx) => {
+                flatCards.push({ subIdx: sIdx, itemIdx: iIdx, ...item, playerName: sub.name });
+            });
+        });
+
+        flatCards.forEach((card, idx) => {
+            const cardDiv = document.createElement("div");
+            cardDiv.className = "field-card";
+            
+            let numDisplay = card.revealed ? 
+                `<div class="number-badge" onclick="toggleReveal(${card.subIdx}, ${card.itemIdx})">${card.number}</div>` : 
+                `<div class="hidden-num">？（非公開）</div>`;
+
+            cardDiv.innerHTML = `
+                <small style="color:#008b8b; font-weight:bold;">${card.playerName}</small>
+                <div style="font-size:18px; margin: 5px 0;"><strong>${card.word || "（ワードなし）"}</strong></div>
+                <img src="${card.imgUrl}" onerror="this.src='https://picsum.photos/200/130';">
+                <div>${numDisplay}</div>
+                <div class="move-btns">
+                    <button onclick="moveCardItem(${idx}, -1)">← 左へ</button>
+                    <button onclick="moveCardItem(${idx}, 1)">右へ →</button>
+                </div>
+            `;
+            container.appendChild(cardDiv);
+        });
+    }
+
+    function moveCardItem(flatIndex, direction) {
+        loadState();
+        let flatCards = [];
+        state.allSubmissions.forEach((sub) => {
+            sub.items.forEach((item) => {
+                flatCards.push(item);
+            });
+        });
+
+        const targetIdx = flatIndex + direction;
+        if(targetIdx < 0 || targetIdx >= flatCards.length) return;
+
+        let temp = flatCards[flatIndex];
+        flatCards[flatIndex] = flatCards[targetIdx];
+        flatCards[targetIdx] = temp;
+
+        let cursor = 0;
+        state.allSubmissions.forEach(sub => {
+            for(let i=0; i<sub.items.length; i++) {
+                sub.items[i] = flatCards[cursor++];
+            }
+        });
+
+        saveState();
+        renderField();
+    }
+
+    function toggleReveal(subIdx, itemIdx) {
+        loadState();
+        state.allSubmissions[subIdx].items[itemIdx].revealed = !state.allSubmissions[subIdx].items[itemIdx].revealed;
+        saveState();
+        renderField();
+    }
+
+    function nextPhase() {
+        loadState();
+        const btn = document.getElementById("phase-btn");
+        if(btn.innerText.includes("結果発表")) {
+            state.allSubmissions.forEach(sub => {
+                sub.items.forEach(item => {
+                    item.revealed = true;
+                });
+            });
+            btn.innerText = "ゲームをリセットする";
+            btn.style.background = "#95a5a6";
+        } else {
+            state.phase = "lobby";
+            state.allSubmissions = [];
+            state.theme = "";
+            btn.innerText = "結果発表へ進む";
+            btn.style.background = "var(--accent)";
+        }
+        saveState();
+        renderCurrentScreen();
+    }
+
+    loadState();
+    renderCurrentScreen();
+</script>
+
+</body>
+</html>
