@@ -2,7 +2,9 @@
 <html lang="ja">
 <head>
     <meta charset="UTF-8">
-    <title>Discord ito オンライン</title>
+    <title>Discord ito オンライン (P2P版)</title>
+    <!-- PeerJSライブラリの読み込み -->
+    <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
     <style>
         :root {
             --bg-color: #f4fbfb;
@@ -64,76 +66,90 @@
             font-weight: bold;
         }
 
-        /* 場のカード一覧 */
-        #field-container { display: flex; gap: 15px; flex-wrap: wrap; margin-top: 15px; }
+        /* 場のカード一覧（正方形に近い迫力あるサイズ） */
+        #field-container { display: flex; gap: 20px; flex-wrap: wrap; margin-top: 15px; }
         .field-card { 
             background: #ffffff; 
             border: 2px solid var(--primary); 
-            border-radius: 10px; 
+            border-radius: 12px; 
             padding: 15px; 
-            width: 220px; 
+            width: 240px; 
             text-align: center; 
             position: relative; 
-            box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.06);
         }
-        .field-card img { width: 100%; height: 130px; object-fit: cover; border-radius: 6px; background: #e0f8f8; margin-top: 8px; }
-        .number-badge { font-size: 24px; font-weight: bold; color: #27ae60; background: var(--accent); padding: 5px 10px; border-radius: 6px; display: inline-block; margin-top: 5px; cursor: pointer; border: 1px solid var(--accent-border); }
-        .hidden-num { font-size: 18px; font-weight: bold; color: #7f8c8d; background: #ecf0f1; padding: 5px 10px; border-radius: 6px; display: inline-block; margin-top: 5px; }
-        .move-btns { margin-top: 8px; display: flex; justify-content: space-between; }
-        .move-btns button { padding: 5px 10px; font-size: 14px; background: #7f8c8d; }
+        .field-card img { width: 100%; height: 200px; object-fit: cover; border-radius: 8px; background: #e0f8f8; margin-top: 8px; }
+        .number-badge { font-size: 26px; font-weight: bold; color: #27ae60; background: var(--accent); padding: 6px 12px; border-radius: 8px; display: inline-block; margin-top: 8px; cursor: pointer; border: 1px solid var(--accent-border); }
+        .hidden-num { font-size: 18px; font-weight: bold; color: #7f8c8d; background: #ecf0f1; padding: 6px 12px; border-radius: 8px; display: inline-block; margin-top: 8px; }
+        .move-btns { margin-top: 10px; display: flex; justify-content: space-between; }
+        .move-btns button { padding: 6px 12px; font-size: 14px; background: #7f8c8d; }
         .move-btns button:hover { background: #595f61; }
         .sync-bar { background: var(--primary); padding: 10px 15px; border-radius: 8px; margin-bottom: 15px; display: flex; justify-content: space-between; align-items: center; color: #1a252f; font-weight: bold; border: 1px solid #85e3e3; }
-        .status-msg { font-size: 12px; color: #555; margin-left: 10px; }
+        .status-msg { font-size: 14px; color: #006666; margin-left: 10px; font-weight: bold; }
     </style>
 </head>
 <body>
 
     <div class="sync-bar">
         <div>
-            <span>ルームID: <span id="current-room-id" style="color: #006666;">未接続</span></span>
+            <span>接続モード: <span id="connection-mode-label" style="color: #006666;">未接続</span></span>
             <span id="sync-status" class="status-msg">● 待機中</span>
         </div>
-        <button onclick="cloudSync(true)" style="background: #20b2aa; padding: 6px 16px; font-size: 14px;">🔄 手動同期</button>
+        <span id="my-peer-id-display" style="font-size: 13px; color: #333;"></span>
     </div>
 
     <h1>Discord ito オンライン</h1>
 
-    <!-- 1. ログイン・ルーム設定画面 -->
+    <!-- 1. ルーム作成・参加選択画面 -->
     <div id="login-screen" class="card">
-        <h2>ルーム参加設定</h2>
-        <p style="font-size: 14px; color: #555;">スマホやPCで同じ部屋に入るには、同じ「ルームID」を入力してください（存在しない場合は自動で部屋が作成されます）。</p>
-        <div style="margin-bottom: 10px;">
-            <label>ルームID: <input type="text" id="room-id-input" placeholder="例: kotori-ito-room" value="family-room-1"></label>
+        <h2>ルーム接続設定</h2>
+        <p style="font-size: 14px; color: #555;">部屋の主（ホスト）になる人は「ルームを作成」、参加する人はホストから聞いたIDを入力して「ルームに参加」を押してください。</p>
+        
+        <div style="margin-bottom: 15px;">
+            <input type="text" id="player-name-input" placeholder="ハンドルネームを入力" value="プレイヤーネーム" style="width: 60%;"><br>
         </div>
-        <div class="flex">
-            <input type="text" id="player-name-input" placeholder="ハンドルネームを入力" value="プレイヤーネーム">
-            <button onclick="joinGame()" style="background: #20b2aa;">入室する</button>
+
+        <div style="background: #e0f8f8; padding: 15px; border-radius: 8px; margin-bottom: 15px; border: 1px solid var(--border-color);">
+            <h3>A. 新しく部屋を作る（ホスト）</h3>
+            <button onclick="createRoom()" style="background: #20b2aa;">ルームを作成する</button>
+        </div>
+
+        <div style="background: #fafdfd; padding: 15px; border-radius: 8px; border: 1px solid var(--border-color);">
+            <h3>B. 既存の部屋に参加する（ゲスト）</h3>
+            <input type="text" id="join-room-id-input" placeholder="ホストのルームIDを入力" style="width: 60%;">
+            <button onclick="joinRoom()" style="background: #5cacac;">ルームに参加する</button>
         </div>
     </div>
 
     <!-- 2. ロビー・準備画面 -->
     <div id="lobby-screen" class="card hidden">
-        <h2>ロビー <span style="font-size: 14px; font-weight: normal; color: #555;">(部屋: <span id="display-room-id" style="font-weight:bold; color:#006666;"></span>)</span></h2>
+        <h2>ロビー <span style="font-size: 14px; font-weight: normal; color: #555;">(ルームID: <span id="display-room-id" style="font-weight:bold; color:#006666; user-select: all;"></span>)</span></h2>
+        <p style="font-size: 13px; color: #c0392b;" id="host-share-notice">※このルームIDをDiscordのメンバーに共有してください。</p>
         <p>参加メンバー: <span id="player-list"></span></p>
         <div class="flex">
             <button onclick="leaveGame()" style="background: #e74c3c; font-size: 14px;">🚪 退室する</button>
         </div>
         <hr style="border:0; border-top:1px solid #d1e7e7; margin: 15px 0;">
-        <h3>ゲーム設定</h3>
-        <label>親の決め方: 
-            <select id="dealer-mode">
-                <option value="order">順番通り</option>
-                <option value="random">ランダム</option>
-            </select>
-        </label><br>
-        <label>手札の枚数（難易度）: 
-            <select id="card-count">
-                <option value="1">1枚（標準）</option>
-                <option value="2">2枚（高難易度）</option>
-                <option value="3">3枚（激ムズ）</option>
-            </select>
-        </label><br><br>
-        <button onclick="startGame()" style="background: var(--accent); color: #2c3e50; border: 1px solid var(--accent-border);">準備完了 / ゲーム開始</button>
+        <div id="host-settings-area">
+            <h3>ゲーム設定（ホストのみ変更可能）</h3>
+            <label>親の決め方: 
+                <select id="dealer-mode">
+                    <option value="order">順番通り</option>
+                    <option value="random">ランダム</option>
+                </select>
+            </label><br>
+            <label>手札の枚数（難易度）: 
+                <select id="card-count">
+                    <option value="1">1枚（標準）</option>
+                    <option value="2">2枚（高難易度）</option>
+                    <option value="3">3枚（激ムズ）</option>
+                </select>
+            </label><br><br>
+            <button onclick="startGame()" style="background: var(--accent); color: #2c3e50; border: 1px solid var(--accent-border);">準備完了 / ゲーム開始</button>
+        </div>
+        <div id="guest-waiting-notice" class="hidden">
+            <p style="color: #555; font-weight: bold;">ホストがゲームを開始するのを待っています...</p>
+        </div>
     </div>
 
     <!-- 3. ゲームプレイ画面 -->
@@ -160,10 +176,12 @@
     </div>
 
 <script>
-    // 無料の公開JSONストレージサービス（json.psty.io を利用。自動作成・同期に対応）
-    const API_BASE = "https://json.psty.io/api_v1.js?key=";
-    let roomId = "";
-
+    let peer = null;
+    let conn = null; // ゲストの場合はホストへのコネクション、ホストの場合は接続された全ゲストのリスト
+    let hostConnections = []; 
+    let isHost = false;
+    let myPeerId = "";
+    
     let state = {
         players: [],
         dealerIndex: 0,
@@ -175,93 +193,155 @@
     window.myInputValues = {}; 
     window.myCurrentName = "";
     window.myAssignedNumbers = [];
-    let isSyncing = false;
 
-    // クラウドから状態を取得する（GET）
-    async function cloudSync(isManual = false) {
-        if (isSyncing || !roomId) return;
-        isSyncing = true;
-        
-        const statusEl = document.getElementById("sync-status");
-        if(statusEl) statusEl.innerText = "● 同期中...";
+    // PeerJSの初期化
+    function initPeer(customId = undefined) {
+        peer = new Peer(customId, {
+            debug: 1
+        });
 
-        try {
-            const res = await fetch(`${API_BASE}${roomId}`);
-            if (res.ok) {
-                const cloudState = await res.json();
-                if (cloudState && cloudState.phase) {
-                    state = cloudState;
-                    renderCurrentScreen();
-                }
+        peer.on('open', (id) => {
+            myPeerId = id;
+            document.getElementById("sync-status").innerText = "● 接続待機OK";
+            if(isHost) {
+                document.getElementById("current-room-id").innerText = myPeerId;
+                document.getElementById("display-room-id").innerText = myPeerId;
+                document.getElementById("connection-mode-label").innerText = "ホスト（部屋の主）";
             }
-            if(statusEl) statusEl.innerText = "● 同期完了";
-        } catch (e) {
-            console.log("同期スキップまたは新規ルーム", e);
-            if(statusEl) statusEl.innerText = "● 接続中";
-        } finally {
-            isSyncing = false;
-        }
-    }
+        });
 
-    // クラウドへ状態を保存する（POST / PUT 相当の自動保存）
-    async function pushState() {
-        if (!roomId) return;
-        const statusEl = document.getElementById("sync-status");
-        if(statusEl) statusEl.innerText = "● 保存中...";
-
-        try {
-            await fetch(`${API_BASE}${roomId}`, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify(state)
-            });
-            if(statusEl) statusEl.innerText = "● 保存完了";
-        } catch (e) {
-            console.error("保存失敗", e);
-            if(statusEl) statusEl.innerText = "● 保存失敗";
-        }
-    }
-
-    function joinGame() {
-        const rInput = document.getElementById("room-id-input").value.trim();
-        const nameInput = document.getElementById("player-name-input").value.trim();
-        if(!rInput) return alert("ルームIDを入力してください");
-        if(!nameInput) return alert("名前を入力してください");
-        
-        roomId = rInput;
-        document.getElementById("current-room-id").innerText = roomId;
-        document.getElementById("display-room-id").innerText = roomId;
-        window.myCurrentName = nameInput;
-
-        // まず現在のクラウド状態を取得して合流
-        cloudSync(true).then(() => {
-            if(!state.players.includes(nameInput)) {
-                state.players.push(nameInput);
+        peer.on('connection', (incomingConn) => {
+            if(isHost) {
+                hostConnections.push(incomingConn);
+                setupHostConnection(incomingConn);
             }
-            pushState();
-            renderCurrentScreen();
+        });
+
+        peer.on('error', (err) => {
+            console.error(err);
+            alert("接続エラーが発生しました: " + err.type);
         });
     }
 
-    function leaveGame() {
-        if(window.myCurrentName) {
-            state.players = state.players.filter(p => p !== window.myCurrentName);
-            window.myCurrentName = "";
-            pushState();
+    // ホスト側：ゲストからの接続設定
+    function setupHostConnection(c) {
+        c.on('data', (data) => {
+            handleIncomingData(data, c);
+        });
+        c.on('close', () => {
+            hostConnections = hostConnections.filter(item => item !== c);
+            // 離脱したプレイヤーを自動検知して削除する処理などをここに入れられます
+        });
+    }
+
+    // ゲスト側：ホストとの接続設定
+    function setupGuestConnection(c) {
+        c.on('open', () => {
+            document.getElementById("sync-status").innerText = "● ホストと接続完了";
+            // 参加リクエストを送信
+            c.send({ type: "JOIN", name: window.myCurrentName });
+        });
+        c.on('data', (data) => {
+            handleIncomingData(data, null);
+        });
+        c.on('close', () => {
+            alert("ホストとの接続が切断されました。");
+        });
+    }
+
+    // データ受信時の処理振り分け
+    function handleIncomingData(data, senderConn) {
+        if(isHost) {
+            // ホストがデータを受け取った場合
+            if(data.type === "JOIN") {
+                if(!state.players.includes(data.name)) {
+                    state.players.push(data.name);
+                }
+                broadcastState();
+            } else if(data.type === "UPDATE_STATE") {
+                state = data.state;
+                broadcastState();
+            }
+        } else {
+            // ゲストがデータを受け取った場合
+            if(data.type === "STATE_SYNC") {
+                state = data.state;
+                renderCurrentScreen();
+            }
         }
+    }
+
+    // ホストから全ゲストへ最新状態をブロードキャスト送信
+    function broadcastState() {
         renderCurrentScreen();
+        hostConnections.forEach(c => {
+            if(c.open) {
+                c.send({ type: "STATE_SYNC", state: state });
+            }
+        });
+    }
+
+    // 状態が変更されたときに保存・同期する関数
+    function syncAndPush() {
+        if(isHost) {
+            broadcastState();
+        } else {
+            if(conn && conn.open) {
+                conn.send({ type: "UPDATE_STATE", state: state });
+            }
+        }
+    }
+
+    // ルームを作成する（ホスト）
+    function createRoom() {
+        const nameInput = document.getElementById("player-name-input").value.trim();
+        if(!nameInput) return alert("名前を入力してください");
+        window.myCurrentName = nameInput;
+        isHost = true;
+
+        // プレフィックス付きのランダムIDを生成してPeerを起動
+        const randomId = "ito-" + Math.random().toString(36.substring(2, 8));
+        initPeer(randomId);
+
+        setTimeout(() => {
+            state.players.push(window.myCurrentName);
+            renderCurrentScreen();
+        }, 1000);
+    }
+
+    // ルームに参加する（ゲスト）
+    function joinRoom() {
+        const targetId = document.getElementById("join-room-id-input").value.trim();
+        const nameInput = document.getElementById("player-name-input").value.trim();
+        if(!targetId) return alert("ルームIDを入力してください");
+        if(!nameInput) return alert("名前を入力してください");
+
+        window.myCurrentName = nameInput;
+        isHost = false;
+        document.getElementById("connection-mode-label").innerText = "ゲスト（参加者）";
+        document.getElementById("host-share-notice").classList.add("hidden");
+        document.getElementById("host-settings-area").classList.add("hidden");
+        document.getElementById("guest-waiting-notice").classList.remove("hidden");
+
+        initPeer(); // 自分のPeerを作ってから接続
+        setTimeout(() => {
+            conn = peer.connect(targetId);
+            setupGuestConnection(conn);
+        }, 1000);
+    }
+
+    function leaveGame() {
+        location.reload(); // リロードでリセット
     }
 
     function removePlayer(name) {
+        if(!isHost) return;
         state.players = state.players.filter(p => p !== name);
-        if(window.myCurrentName === name) {
-            window.myCurrentName = "";
-        }
-        pushState();
-        renderCurrentScreen();
+        syncAndPush();
     }
 
     function startGame() {
+        if(!isHost) return;
         const count = parseInt(document.getElementById("card-count").value);
         const dealerMode = document.getElementById("dealer-mode").value;
         
@@ -285,16 +365,14 @@
         state.allSubmissions = [];
         state.phase = "play";
         
-        pushState();
-        renderCurrentScreen();
+        syncAndPush();
     }
 
     function setTheme() {
         const theme = document.getElementById("theme-input").value.trim();
         if(!theme) return alert("お題を入力してください");
         state.theme = theme;
-        pushState();
-        renderCurrentScreen();
+        syncAndPush();
     }
 
     function updateInputVal(index, key, val) {
@@ -311,9 +389,9 @@
             const imgUrlInput = document.getElementById(`img-url-${index}`);
             
             const word = wordInput ? wordInput.value.trim() : (window.myInputValues[index]?.word || "");
-            const imgUrl = imgUrlInput ? imgUrlInput.value.trim() : (window.myInputValues[index]?.imgUrl || "https://picsum.photos/200/130");
+            const imgUrl = imgUrlInput ? imgUrlInput.value.trim() : (window.myInputValues[index]?.imgUrl || "https://picsum.photos/200/200");
             
-            items.push({ number: num, word: word, imgUrl: imgUrl || "https://picsum.photos/200/130", revealed: false });
+            items.push({ number: num, word: word, imgUrl: imgUrl || "https://picsum.photos/200/200", revealed: false });
         });
 
         const existingIdx = state.allSubmissions.findIndex(s => s.name === window.myCurrentName);
@@ -324,8 +402,7 @@
         }
 
         state.phase = "field";
-        pushState();
-        renderCurrentScreen();
+        syncAndPush();
     }
 
     function renderCurrentScreen() {
@@ -335,19 +412,18 @@
         document.getElementById("field-screen").classList.add("hidden");
 
         if(state.phase === "lobby") {
-            if(window.myCurrentName && state.players.includes(window.myCurrentName)) {
-                document.getElementById("lobby-screen").classList.remove("hidden");
-                const listContainer = document.getElementById("player-list");
-                listContainer.innerHTML = "";
-                state.players.forEach(p => {
-                    const badge = document.createElement("span");
-                    badge.className = "player-badge";
-                    badge.innerHTML = `${p} <span class="remove-btn" onclick="removePlayer('${p}')" title="このプレイヤーを削除">✕</span>`;
-                    listContainer.appendChild(badge);
-                });
-            } else {
-                document.getElementById("login-screen").classList.remove("hidden");
-            }
+            document.getElementById("lobby-screen").classList.remove("hidden");
+            document.getElementById("display-room-id").innerText = isHost ? myPeerId : (conn ? conn.peer : "接続中...");
+            
+            const listContainer = document.getElementById("player-list");
+            listContainer.innerHTML = "";
+            state.players.forEach(p => {
+                const badge = document.createElement("span");
+                badge.className = "player-badge";
+                let removeHtml = (isHost && p !== window.myCurrentName) ? `<span class="remove-btn" onclick="removePlayer('${p}')" title="このプレイヤーを削除">✕</span>` : '';
+                badge.innerHTML = `${p} ${removeHtml}`;
+                listContainer.appendChild(badge);
+            });
         } else if(state.phase === "play") {
             document.getElementById("game-screen").classList.remove("hidden");
             document.getElementById("theme-display").innerText = state.theme ? "お題: " + state.theme : "お題: まだ決まっていません";
@@ -392,8 +468,8 @@
                 <p><strong>数字カード #${index+1}</strong>: <span style="color:#27ae60; font-size:22px; font-weight:bold;">${num}</span></p>
                 <label>答えのワード: <input type="text" id="word-${index}" value="${currentData.word}" placeholder="例：コンビニのコーヒー" oninput="updateInputVal(${index}, 'word', this.value)"></label><br>
                 <label>画像URL: <input type="text" id="img-url-${index}" value="${currentData.imgUrl}" placeholder="https://example.com/image.jpg" style="width: 60%;" oninput="updateInputVal(${index}, 'img-url', this.value); previewImage(${index})"></label>
-                <div id="img-preview-${index}" style="margin-top:8px;">
-                    ${currentData.imgUrl ? `<img src="${currentData.imgUrl}" style="width:120px; height:80px; object-fit:cover; border-radius:6px;" onerror="this.style.display='none';">` : ''}
+                <div id="img-preview-${index}" style="margin-top:10px;">
+                    ${currentData.imgUrl ? `<img src="${currentData.imgUrl}" style="width:140px; height:140px; object-fit:cover; border-radius:8px;" onerror="this.style.display='none';">` : ''}
                 </div>
             `;
             container.appendChild(div);
@@ -404,7 +480,7 @@
         const url = document.getElementById(`img-url-${index}`).value.trim();
         const preview = document.getElementById(`img-preview-${index}`);
         if(url) {
-            preview.innerHTML = `<img src="${url}" style="width:120px; height:80px; object-fit:cover; border-radius:6px;" onerror="this.onerror=null; this.src='https://picsum.photos/200/130';">`;
+            preview.innerHTML = `<img src="${url}" style="width:140px; height:140px; object-fit:cover; border-radius:8px;" onerror="this.onerror=null; this.src='https://picsum.photos/200/200';">`;
         } else {
             preview.innerHTML = "";
         }
@@ -430,9 +506,9 @@
                 `<div class="hidden-num">？（非公開）</div>`;
 
             cardDiv.innerHTML = `
-                <small style="color:#008b8b; font-weight:bold;">${card.playerName}</small>
-                <div style="font-size:18px; margin: 5px 0;"><strong>${card.word || "（ワードなし）"}</strong></div>
-                <img src="${card.imgUrl}" onerror="this.src='https://picsum.photos/200/130';">
+                <small style="color:#008b8b; font-weight:bold; font-size:14px;">${card.playerName}</small>
+                <div style="font-size:18px; margin: 8px 0;"><strong>${card.word || "（ワードなし）"}</strong></div>
+                <img src="${card.imgUrl}" onerror="this.src='https://picsum.photos/200/200';">
                 <div>${numDisplay}</div>
                 <div class="move-btns">
                     <button onclick="moveCardItem(${idx}, -1)">← 左へ</button>
@@ -465,43 +541,39 @@
             }
         });
 
-        pushState();
+        syncAndPush();
         renderField();
     }
 
     function toggleReveal(subIdx, itemIdx) {
         state.allSubmissions[subIdx].items[itemIdx].revealed = !state.allSubmissions[subIdx].items[itemIdx].revealed;
-        pushState();
+        syncAndPush();
         renderField();
     }
 
     function nextPhase() {
-        const btn = document.getElementById("phase-btn");
-        if(btn.innerText.includes("結果発表")) {
-            state.allSubmissions.forEach(sub => {
-                sub.items.forEach(item => {
-                    item.revealed = true;
+        if(isHost) {
+            const btn = document.getElementById("phase-btn");
+            if(btn.innerText.includes("結果発表")) {
+                state.allSubmissions.forEach(sub => {
+                    sub.items.forEach(item => {
+                        item.revealed = true;
+                    });
                 });
-            });
-            btn.innerText = "ゲームをリセットする";
-            btn.style.background = "#95a5a6";
+                btn.innerText = "ゲームをリセットする";
+                btn.style.background = "#95a5a6";
+            } else {
+                state.phase = "lobby";
+                state.allSubmissions = [];
+                state.theme = "";
+                btn.innerText = "結果発表へ進む";
+                btn.style.background = "var(--accent)";
+            }
+            syncAndPush();
         } else {
-            state.phase = "lobby";
-            state.allSubmissions = [];
-            state.theme = "";
-            btn.innerText = "結果発表へ進む";
-            btn.style.background = "var(--accent)";
+            alert("結果発表の操作はホスト（部屋の主）のみ行えます");
         }
-        pushState();
-        renderCurrentScreen();
     }
-
-    // ── 60秒に1回の定期自動同期 ──
-    setInterval(() => {
-        if (window.myCurrentName && roomId) {
-            cloudSync(false);
-        }
-    }, 60000);
 </script>
 
 </body>
