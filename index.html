@@ -101,7 +101,7 @@
     <!-- 1. ログイン・ルーム設定画面 -->
     <div id="login-screen" class="card">
         <h2>ルーム参加設定</h2>
-        <p style="font-size: 14px; color: #555;">スマホやPCで同じ部屋に入るには、同じ「ルームID」を入力してください。</p>
+        <p style="font-size: 14px; color: #555;">スマホやPCで同じ部屋に入るには、同じ「ルームID」を入力してください（存在しない場合は自動で部屋が作成されます）。</p>
         <div style="margin-bottom: 10px;">
             <label>ルームID: <input type="text" id="room-id-input" placeholder="例: kotori-ito-room" value="family-room-1"></label>
         </div>
@@ -160,7 +160,8 @@
     </div>
 
 <script>
-    const API_BASE = "https://api.npoint.io/";
+    // 無料の公開JSONストレージサービス（json.psty.io を利用。自動作成・同期に対応）
+    const API_BASE = "https://json.psty.io/api_v1.js?key=";
     let roomId = "";
 
     let state = {
@@ -195,14 +196,14 @@
             }
             if(statusEl) statusEl.innerText = "● 同期完了";
         } catch (e) {
-            console.log("同期スキップまたはオフライン", e);
-            if(statusEl) statusEl.innerText = "● オフライン";
+            console.log("同期スキップまたは新規ルーム", e);
+            if(statusEl) statusEl.innerText = "● 接続中";
         } finally {
             isSyncing = false;
         }
     }
 
-    // クラウドへ状態を保存する（POST）
+    // クラウドへ状態を保存する（POST / PUT 相当の自動保存）
     async function pushState() {
         if (!roomId) return;
         const statusEl = document.getElementById("sync-status");
