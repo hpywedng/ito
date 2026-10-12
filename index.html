@@ -59,6 +59,11 @@
             font-weight: bold;
             color: #1a252f;
         }
+        .player-badge.submitted {
+            background: var(--accent);
+            border-color: var(--accent-border);
+            color: #27ae60;
+        }
         .player-badge .remove-btn {
             margin-left: 6px;
             color: #e74c3c;
@@ -66,7 +71,7 @@
             font-weight: bold;
         }
 
-        /* 場のカード一覧（正方形に近い迫力あるサイズ） */
+        /* 場のカード一覧（テーブルエリア） */
         #field-container { display: flex; gap: 20px; flex-wrap: wrap; margin-top: 15px; }
         .field-card { 
             background: #ffffff; 
@@ -153,7 +158,7 @@
         </div>
     </div>
 
-    <!-- 3. ゲームプレイ画面 -->
+    <!-- 3. メインプレイ画面（中央テーブル ＆ 下部入力フォームが同居） -->
     <div id="game-screen" class="card hidden">
         <h2 id="theme-display" style="color: #008b8b;">お題: まだ決まっていません</h2>
         <div id="dealer-input-area" class="hidden" style="background: #e0f8f8; padding: 15px; border-radius: 8px; margin-bottom: 15px; border: 1px solid var(--primary);">
@@ -161,19 +166,32 @@
             <input type="text" id="theme-input" placeholder="お題を入力してください（例：コンビニといえば？）" style="width: 70%;">
             <button onclick="setTheme()" style="background: #20b2aa;">お題を決定する</button>
         </div>
-        <hr style="border:0; border-top:1px solid #d1e7e7; margin: 15px 0;">
-        <h3>あなたの手札・解答入力</h3>
-        <div id="my-hands-container"></div>
-        <button onclick="submitHands()" style="background: var(--accent); color: #2c3e50; margin-top: 15px; width: 100%; padding: 12px; font-size: 18px; border: 1px solid var(--accent-border);">場に提出する</button>
-    </div>
 
-    <!-- 4. 会議・結果発表画面 -->
-    <div id="field-screen" class="card hidden">
-        <h2 id="field-theme-title" style="color: #008b8b;">お題: </h2>
-        <p>左右のボタンで並び順を調整してください。全員納得したら「結果発表へ」を押します。</p>
-        <div id="field-container"></div>
-        <br>
-        <button id="phase-btn" onclick="nextPhase()" style="background: var(--accent); color: #2c3e50; padding: 12px 24px; font-size: 18px; border: 1px solid var(--accent-border); font-weight: bold;">結果発表へ進む</button>
+        <hr style="border:0; border-top:1px solid #d1e7e7; margin: 20px 0;">
+
+        <!-- 3-A. リアルタイム共有テーブル（上部） -->
+        <div style="background: #fafdfd; border: 2px solid var(--primary); padding: 15px; border-radius: 10px; margin-bottom: 25px;">
+            <h3 style="margin-top: 0; color: #006666;">🃏 場の共有テーブル（みんなの提出カード）</h3>
+            <p style="font-size: 13px; color: #555;">提出されたカードがここにリアルタイムで並びます。左右のボタンで自由に並び順を調整できます。</p>
+            <div id="field-container"></div>
+            
+            <div style="margin-top: 20px; border-top: 1px dashed var(--border-color); padding-top: 15px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap;">
+                <span id="submission-status-text" style="font-weight: bold; color: #555;">提出状況: 0 / 0 人</span>
+                <button id="phase-btn" onclick="nextPhase()" style="background: var(--accent); color: #2c3e50; padding: 10px 20px; font-size: 16px; border: 1px solid var(--accent-border); font-weight: bold;">結果発表（数字を全公開）</button>
+            </div>
+        </div>
+
+        <!-- 3-B. 自分の手札入力・提出エリア（下部） -->
+        <div style="background: #ffffff; border: 1px solid var(--border-color); padding: 15px; border-radius: 10px;">
+            <div id="input-form-area">
+                <h3 style="margin-top: 0;">✍️ あなたの手札・解答入力</h3>
+                <div id="my-hands-container"></div>
+                <button onclick="submitHands()" style="background: var(--accent); color: #2c3e50; margin-top: 15px; width: 100%; padding: 12px; font-size: 18px; border: 1px solid var(--accent-border);">場に提出する</button>
+            </div>
+            <div id="submitted-notice-area" class="hidden" style="text-align: center; padding: 15px; background: #e0f8f8; border-radius: 8px;">
+                <p style="color: #27ae60; font-weight: bold; margin: 0;">✨ あなたのカードを場に提出済みです（内容の再修正＆再提出も可能です）</p>
+            </div>
+        </div>
     </div>
 
 <script>
@@ -188,7 +206,8 @@
         dealerIndex: 0,
         theme: "",
         allSubmissions: [], 
-        phase: "lobby" 
+        phase: "lobby",
+        isRevealed: false // 結果発表（数字全公開）の状態
     };
 
     window.myInputValues = {}; 
@@ -363,7 +382,8 @@
         window.myInputValues = {};
         state.theme = "";
         state.allSubmissions = [];
-        state.phase = "play";
+        state.isRevealed = false;
+        state.phase = "play"; // メインの統合プレイ画面へ
         
         syncAndPush();
     }
@@ -391,7 +411,7 @@
             const word = wordInput ? wordInput.value.trim() : (window.myInputValues[index]?.word || "");
             const imgUrl = imgUrlInput ? imgUrlInput.value.trim() : (window.myInputValues[index]?.imgUrl || "https://picsum.photos/200/200");
             
-            items.push({ number: num, word: word, imgUrl: imgUrl || "https://picsum.photos/200/200", revealed: false });
+            items.push({ number: num, word: word, imgUrl: imgUrl || "https://picsum.photos/200/200", revealed: state.isRevealed });
         });
 
         const existingIdx = state.allSubmissions.findIndex(s => s.name === window.myCurrentName);
@@ -401,15 +421,14 @@
             state.allSubmissions.push({ name: window.myCurrentName, items: items });
         }
 
-        state.phase = "field";
         syncAndPush();
+        renderCurrentScreen();
     }
 
     function renderCurrentScreen() {
         document.getElementById("login-screen").classList.add("hidden");
         document.getElementById("lobby-screen").classList.add("hidden");
         document.getElementById("game-screen").classList.add("hidden");
-        document.getElementById("field-screen").classList.add("hidden");
 
         if(state.phase === "lobby") {
             document.getElementById("lobby-screen").classList.remove("hidden");
@@ -440,13 +459,26 @@
                 window.myAssignedNumbers = [50];
             }
             
+            // 手札入力フォームの初期描画（まだ作られていない場合のみ）
             const container = document.getElementById("my-hands-container");
             if(container.children.length === 0) {
                 renderMyHands();
             }
-        } else if(state.phase === "field") {
-            document.getElementById("field-screen").classList.remove("hidden");
-            document.getElementById("field-theme-title").innerText = "お題: " + (state.theme || "（未設定）");
+
+            // 提出済みかどうかの表示切り替え
+            const hasSubmitted = state.allSubmissions.some(s => s.name === window.myCurrentName);
+            if(hasSubmitted) {
+                document.getElementById("submitted-notice-area").classList.remove("hidden");
+            } else {
+                document.getElementById("submitted-notice-area").classList.add("hidden");
+            }
+
+            // 提出状況カウンターの更新
+            const submittedCount = state.allSubmissions.length;
+            const totalPlayers = state.players.length;
+            document.getElementById("submission-status-text").innerText = `提出状況: ${submittedCount} / ${totalPlayers} 人完了`;
+
+            // 場のテーブルを描画
             renderField();
         }
     }
@@ -498,11 +530,16 @@
             });
         });
 
+        if(flatCards.length === 0) {
+            container.innerHTML = `<p style="color: #7f8c8d; font-style: italic;">まだ誰もカードを提出していません。下からカードを出してみましょう！</p>`;
+            return;
+        }
+
         flatCards.forEach((card, idx) => {
             const cardDiv = document.createElement("div");
             cardDiv.className = "field-card";
             
-            let numDisplay = card.revealed ? 
+            let numDisplay = (card.revealed || state.isRevealed) ? 
                 `<div class="number-badge" onclick="toggleReveal(${card.subIdx}, ${card.itemIdx})">${card.number}</div>` : 
                 `<div class="hidden-num">？（非公開）</div>`;
 
@@ -553,27 +590,28 @@
     }
 
     function nextPhase() {
-        if(isHost) {
-            const btn = document.getElementById("phase-btn");
-            if(btn.innerText.includes("結果発表")) {
-                state.allSubmissions.forEach(sub => {
-                    sub.items.forEach(item => {
-                        item.revealed = true;
-                    });
+        const btn = document.getElementById("phase-btn");
+        if(!state.isRevealed) {
+            // 結果発表（全公開）モードへ
+            state.isRevealed = true;
+            state.allSubmissions.forEach(sub => {
+                sub.items.forEach(item => {
+                    item.revealed = true;
                 });
-                btn.innerText = "ゲームをリセットする";
-                btn.style.background = "#95a5a6";
-            } else {
-                state.phase = "lobby";
-                state.allSubmissions = [];
-                state.theme = "";
-                btn.innerText = "結果発表へ進む";
-                btn.style.background = "var(--accent)";
-            }
-            syncAndPush();
+            });
+            btn.innerText = "ゲームをリセットしてロビーに戻る";
+            btn.style.background = "#95a5a6";
         } else {
-            alert("結果発表の操作はホスト（部屋の主）のみ行えます");
+            // リセットしてロビーへ戻る
+            state.phase = "lobby";
+            state.allSubmissions = [];
+            state.theme = "";
+            state.isRevealed = false;
+            btn.innerText = "結果発表（数字を全公開）";
+            btn.style.background = "var(--accent)";
         }
+        syncAndPush();
+        renderCurrentScreen();
     }
 </script>
 
