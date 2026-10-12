@@ -59,11 +59,6 @@
             font-weight: bold;
             color: #1a252f;
         }
-        .player-badge.submitted {
-            background: var(--accent);
-            border-color: var(--accent-border);
-            color: #27ae60;
-        }
         .player-badge .remove-btn {
             margin-left: 6px;
             color: #e74c3c;
@@ -207,12 +202,12 @@
         theme: "",
         allSubmissions: [], 
         phase: "lobby",
-        isRevealed: false // 結果発表（数字全公開）の状態
+        isRevealed: false,
+        playerHands: {} // 各プレイヤーに割り当てられた数字のマップ { "名前": [番号1, 番号2...] }
     };
 
     window.myInputValues = {}; 
     window.myCurrentName = "";
-    window.myAssignedNumbers = [];
 
     // PeerJSの初期化
     function initPeer(customId, callback) {
@@ -364,26 +359,33 @@
         const count = parseInt(document.getElementById("card-count").value);
         const dealerMode = document.getElementById("dealer-mode").value;
         
+        // 親の決定
         if(dealerMode === "random") {
             state.dealerIndex = Math.floor(Math.random() * state.players.length);
         } else {
             state.dealerIndex = (state.dealerIndex + 1) % state.players.length;
         }
 
+        // 1〜100の数字をシャッフル
         let numbers = Array.from({length: 100}, (_, i) => i + 1);
         numbers.sort(() => Math.random() - 0.5);
         
-        window.myAssignedNumbers = [];
-        for(let i=0; i<count; i++) {
-            window.myAssignedNumbers.push(numbers.pop());
-        }
-        window.myAssignedNumbers.sort((a,b) => a - b);
+        // 全プレイヤーに手札を分配して記録
+        state.playerHands = {};
+        state.players.forEach(playerName => {
+            let pHands = [];
+            for(let i = 0; i < count; i++) {
+                if(numbers.length > 0) pHands.push(numbers.pop());
+            }
+            pHands.sort((a, b) => a - b);
+            state.playerHands[playerName] = pHands;
+        });
 
         window.myInputValues = {};
         state.theme = "";
         state.allSubmissions = [];
         state.isRevealed = false;
-        state.phase = "play"; // メインの統合プレイ画面へ
+        state.phase = "play"; // メインプレイ画面へ
         
         syncAndPush();
     }
@@ -403,8 +405,11 @@
     }
 
     function submitHands() {
+        // 自分の割り当てられた本当の数字を取得
+        const myAssignedNumbers = state.playerHands[window.myCurrentName] || [50];
         let items = [];
-        window.myAssignedNumbers.forEach((num, index) => {
+
+        myAssignedNumbers.forEach((num, index) => {
             const wordInput = document.getElementById(`word-${index}`);
             const imgUrlInput = document.getElementById(`img-url-${index}`);
             
@@ -455,15 +460,8 @@
                 document.getElementById("dealer-input-area").classList.add("hidden");
             }
 
-            if(!window.myAssignedNumbers || window.myAssignedNumbers.length === 0) {
-                window.myAssignedNumbers = [50];
-            }
-            
-            // 手札入力フォームの初期描画（まだ作られていない場合のみ）
-            const container = document.getElementById("my-hands-container");
-            if(container.children.length === 0) {
-                renderMyHands();
-            }
+            // 手札入力フォームの描画更新（常に最新の手札を反映）
+            renderMyHands();
 
             // 提出済みかどうかの表示切り替え
             const hasSubmitted = state.allSubmissions.some(s => s.name === window.myCurrentName);
@@ -487,7 +485,9 @@
         const container = document.getElementById("my-hands-container");
         container.innerHTML = "";
 
-        window.myAssignedNumbers.forEach((num, index) => {
+        const myAssignedNumbers = state.playerHands[window.myCurrentName] || [50];
+
+        myAssignedNumbers.forEach((num, index) => {
             if(!window.myInputValues[index]) {
                 window.myInputValues[index] = { word: "", imgUrl: "" };
             }
@@ -590,28 +590,33 @@
     }
 
     function nextPhase() {
-        const btn = document.getElementById("phase-btn");
-        if(!state.isRevealed) {
-            // 結果発表（全公開）モードへ
-            state.isRevealed = true;
-            state.allSubmissions.forEach(sub => {
-                sub.items.forEach(item => {
-                    item.revealed = true;
+        if(isHost) {
+            const btn = document.getElementById("phase-btn");
+            if(!state.isRevealed) {
+                // 結果発表（全公開）モードへ
+                state.isRevealed = true;
+                state.allSubmissions.forEach(sub => {
+                    sub.items.forEach(item => {
+                        item.revealed = true;
+                    });
                 });
-            });
-            btn.innerText = "ゲームをリセットしてロビーに戻る";
-            btn.style.background = "#95a5a6";
+                btn.innerText = "ゲームをリセットしてロビーに戻る";
+                btn.style.background = "#95a5a6";
+            } else {
+                // リセットしてロビーへ戻る
+                state.phase = "lobby";
+                state.allSubmissions = [];
+                state.theme = "";
+                state.isRevealed = false;
+                state.playerHands = {};
+                btn.innerText = "結果発表（数字を全公開）";
+                btn.style.background = "var(--accent)";
+            }
+            syncAndPush();
+            renderCurrentScreen();
         } else {
-            // リセットしてロビーへ戻る
-            state.phase = "lobby";
-            state.allSubmissions = [];
-            state.theme = "";
-            state.isRevealed = false;
-            btn.innerText = "結果発表（数字を全公開）";
-            btn.style.background = "var(--accent)";
+            alert("結果発表の操作はホスト（部屋の主）のみ行えます");
         }
-        syncAndPush();
-        renderCurrentScreen();
     }
 </script>
 
