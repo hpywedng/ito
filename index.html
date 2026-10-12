@@ -103,21 +103,22 @@
     <!-- 1. ルーム作成・参加選択画面 -->
     <div id="login-screen" class="card">
         <h2>ルーム接続設定</h2>
-        <p style="font-size: 14px; color: #555;">部屋の主（ホスト）になる人は「ルームを作成」、参加する人はホストから聞いたIDを入力して「ルームに参加」を押してください。</p>
+        <p style="font-size: 14px; color: #555;">部屋の主（ホスト）になる人はルームIDを確認して作成し、参加者はそのIDを入力して参加してください。</p>
         
         <div style="margin-bottom: 15px;">
-            <input type="text" id="player-name-input" placeholder="ハンドルネームを入力" value="プレイヤーネーム" style="width: 60%;"><br>
+            <input type="text" id="player-name-input" placeholder="ハンドルネームを入力" value="プレイヤーネーム" style="width: 60%;">
         </div>
 
         <div style="background: #e0f8f8; padding: 15px; border-radius: 8px; margin-bottom: 15px; border: 1px solid var(--border-color);">
             <h3>A. 新しく部屋を作る（ホスト）</h3>
-            <button onclick="createRoom()" style="background: #20b2aa;">ルームを作成する</button>
+            <label>作りたいルームID: <input type="text" id="create-room-id-input" value="1010" style="width: 50%;"></label><br>
+            <button onclick="createRoom()" style="background: #20b2aa; margin-top: 5px;">ルームを作成する</button>
         </div>
 
         <div style="background: #fafdfd; padding: 15px; border-radius: 8px; border: 1px solid var(--border-color);">
             <h3>B. 既存の部屋に参加する（ゲスト）</h3>
-            <input type="text" id="join-room-id-input" placeholder="ホストのルームIDを入力" style="width: 60%;">
-            <button onclick="joinRoom()" style="background: #5cacac;">ルームに参加する</button>
+            <label>参加するルームID: <input type="text" id="join-room-id-input" placeholder="ホストのルームID" value="1010" style="width: 50%;"></label><br>
+            <button onclick="joinRoom()" style="background: #5cacac; margin-top: 5px;">ルームに参加する</button>
         </div>
     </div>
 
@@ -177,10 +178,10 @@
 
 <script>
     let peer = null;
-    let conn = null; // ゲストの場合はホストへのコネクション、ホストの場合は接続された全ゲストのリスト
+    let conn = null; 
     let hostConnections = []; 
     let isHost = false;
-    let myPeerId = "";
+    let myRoomId = "";
     
     let state = {
         players: [],
@@ -195,19 +196,15 @@
     window.myAssignedNumbers = [];
 
     // PeerJSの初期化
-    function initPeer(customId = undefined) {
+    function initPeer(customId, callback) {
         peer = new Peer(customId, {
             debug: 1
         });
 
         peer.on('open', (id) => {
-            myPeerId = id;
+            myRoomId = id;
             document.getElementById("sync-status").innerText = "● 接続待機OK";
-            if(isHost) {
-                document.getElementById("current-room-id").innerText = myPeerId;
-                document.getElementById("display-room-id").innerText = myPeerId;
-                document.getElementById("connection-mode-label").innerText = "ホスト（部屋の主）";
-            }
+            if(callback) callback();
         });
 
         peer.on('connection', (incomingConn) => {
@@ -219,7 +216,11 @@
 
         peer.on('error', (err) => {
             console.error(err);
-            alert("接続エラーが発生しました: " + err.type);
+            if(err.type === 'unavailable-id') {
+                alert("そのルームIDはすでに使われています（またはホストが既に部屋を作っています）。「ルームに参加する」から入室してください。");
+            } else {
+                alert("接続エラー: " + err.type);
+            }
         });
     }
 
@@ -230,7 +231,6 @@
         });
         c.on('close', () => {
             hostConnections = hostConnections.filter(item => item !== c);
-            // 離脱したプレイヤーを自動検知して削除する処理などをここに入れられます
         });
     }
 
@@ -238,7 +238,6 @@
     function setupGuestConnection(c) {
         c.on('open', () => {
             document.getElementById("sync-status").innerText = "● ホストと接続完了";
-            // 参加リクエストを送信
             c.send({ type: "JOIN", name: window.myCurrentName });
         });
         c.on('data', (data) => {
@@ -249,10 +248,9 @@
         });
     }
 
-    // データ受信時の処理振り分け
+    // データ受信時の処理
     function handleIncomingData(data, senderConn) {
         if(isHost) {
-            // ホストがデータを受け取った場合
             if(data.type === "JOIN") {
                 if(!state.players.includes(data.name)) {
                     state.players.push(data.name);
@@ -263,7 +261,6 @@
                 broadcastState();
             }
         } else {
-            // ゲストがデータを受け取った場合
             if(data.type === "STATE_SYNC") {
                 state = data.state;
                 renderCurrentScreen();
@@ -281,7 +278,7 @@
         });
     }
 
-    // 状態が変更されたときに保存・同期する関数
+    // 状態変更時の同期
     function syncAndPush() {
         if(isHost) {
             broadcastState();
@@ -295,26 +292,28 @@
     // ルームを作成する（ホスト）
     function createRoom() {
         const nameInput = document.getElementById("player-name-input").value.trim();
+        const rInput = document.getElementById("create-room-id-input").value.trim();
         if(!nameInput) return alert("名前を入力してください");
+        if(!rInput) return alert("ルームIDを入力してください");
+
         window.myCurrentName = nameInput;
         isHost = true;
+        document.getElementById("connection-mode-label").innerText = "ホスト（部屋の主）";
 
-        // プレフィックス付きのランダムIDを生成してPeerを起動
-        const randomId = "ito-" + Math.random().toString(36.substring(2, 8));
-        initPeer(randomId);
+        const fullRoomId = "discord-ito-" + rInput;
 
-        setTimeout(() => {
+        initPeer(fullRoomId, () => {
             state.players.push(window.myCurrentName);
             renderCurrentScreen();
-        }, 1000);
+        });
     }
 
     // ルームに参加する（ゲスト）
     function joinRoom() {
-        const targetId = document.getElementById("join-room-id-input").value.trim();
         const nameInput = document.getElementById("player-name-input").value.trim();
-        if(!targetId) return alert("ルームIDを入力してください");
+        const rInput = document.getElementById("join-room-id-input").value.trim();
         if(!nameInput) return alert("名前を入力してください");
+        if(!rInput) return alert("ルームIDを入力してください");
 
         window.myCurrentName = nameInput;
         isHost = false;
@@ -323,15 +322,16 @@
         document.getElementById("host-settings-area").classList.add("hidden");
         document.getElementById("guest-waiting-notice").classList.remove("hidden");
 
-        initPeer(); // 自分のPeerを作ってから接続
-        setTimeout(() => {
-            conn = peer.connect(targetId);
+        const fullRoomId = "discord-ito-" + rInput;
+
+        initPeer(undefined, () => {
+            conn = peer.connect(fullRoomId);
             setupGuestConnection(conn);
-        }, 1000);
+        });
     }
 
     function leaveGame() {
-        location.reload(); // リロードでリセット
+        location.reload();
     }
 
     function removePlayer(name) {
@@ -413,7 +413,8 @@
 
         if(state.phase === "lobby") {
             document.getElementById("lobby-screen").classList.remove("hidden");
-            document.getElementById("display-room-id").innerText = isHost ? myPeerId : (conn ? conn.peer : "接続中...");
+            const displayId = myRoomId.replace("discord-ito-", "");
+            document.getElementById("display-room-id").innerText = displayId || document.getElementById("join-room-id-input").value;
             
             const listContainer = document.getElementById("player-list");
             listContainer.innerHTML = "";
