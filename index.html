@@ -79,7 +79,7 @@
             box-shadow: 0 4px 12px rgba(0,0,0,0.06);
         }
         
-        /* 画像と落書きキャンバスのコンテナ（初期背景を白に変更） */
+        /* 画像と落書きキャンバスのコンテナ */
         .canvas-container {
             position: relative;
             width: 100%;
@@ -89,7 +89,7 @@
             border: 1px solid var(--border-color);
             margin-top: 8px;
             overflow: hidden;
-            touch-action: none; /* スマホでのスクロール防止 */
+            touch-action: none; /* スマホやペンタブでのスクロール・ジェスチャー防止 */
         }
         .field-card img { 
             width: 100%; 
@@ -107,6 +107,7 @@
             width: 100%;
             height: 100%;
             cursor: crosshair;
+            touch-action: none;
         }
 
         .number-badge { font-size: 26px; font-weight: bold; color: #27ae60; background: var(--accent); padding: 6px 12px; border-radius: 8px; display: inline-block; margin-top: 8px; cursor: pointer; border: 1px solid var(--accent-border); }
@@ -223,7 +224,7 @@
     <div id="game-screen" class="card hidden">
         <h2 id="theme-display" style="color: #008b8b;">お題: まだ決まっていません</h2>
         
-        <!-- 親プレイヤー用のお題入力エリア（文言を変更） -->
+        <!-- 親プレイヤー用のお題入力エリア -->
         <div id="dealer-input-area" class="hidden" style="background: #e0f8f8; padding: 15px; border-radius: 8px; margin-bottom: 15px; border: 1px solid var(--primary);">
             <h3 style="color: #006666; margin-top:0;">👑 あなたは親プレイヤーです。お題を入力してください。</h3>
             <input type="text" id="theme-input" placeholder="お題を入力してください（例：コンビニといえば？）" style="width: 70%;">
@@ -232,12 +233,11 @@
 
         <hr style="border:0; border-top:1px solid #d1e7e7; margin: 20px 0;">
 
-        <!-- 3-A. お絵描きツールバー（カードとお題の間に配置） -->
+        <!-- 3-A. お絵描きツールバー -->
         <div class="drawing-toolbar">
             <span class="tool-label">🎨 ペン設定:</span>
             
             <div class="tool-group" id="color-palette">
-                <!-- 初期選択の黒（または白など使いやすいように黒をデフォルトに） -->
                 <button class="color-btn" style="background: #ffffff;" data-color="#ffffff" title="白"></button>
                 <button class="color-btn active" style="background: #000000;" data-color="#000000" title="黒"></button>
                 <button class="color-btn" style="background: #3498db;" data-color="#3498db" title="青"></button>
@@ -270,7 +270,7 @@
         <!-- 3-B. リアルタイム共有テーブル（上部） -->
         <div style="background: #fafdfd; border: 2px solid var(--primary); padding: 15px; border-radius: 10px; margin-bottom: 25px;">
             <h3 style="margin-top: 0; color: #006666;">🃏 場の共有テーブル（みんなの提出カード＆落書き）</h3>
-            <p style="font-size: 13px; color: #555;">画像が未入力の場合は白紙になります。直接マウスやタッチでお絵描きしたり、並び替え・Good/BAD投票ができます。</p>
+            <p style="font-size: 13px; color: #555;">ペンタブやマウスでお絵描きができます。並び替えやGood/BAD投票も可能です。</p>
             <div id="field-container"></div>
             
             <div style="margin-top: 20px; border-top: 1px dashed var(--border-color); padding-top: 15px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap;">
@@ -312,12 +312,11 @@
     window.myInputValues = {}; 
     window.myCurrentName = "";
 
-    // ── お絵描きツールの設定状態（デフォルトは黒ペン） ──
+    // ── お絵描きツールの設定状態 ──
     let currentDrawingColor = "#000000";
     let currentBrushSize = 5;
     let currentToolMode = "pen"; // 'pen' or 'eraser'
 
-    // カラーボタン選択イベント
     document.querySelectorAll('.color-btn').forEach(btn => {
         btn.addEventListener('click', (e) => {
             document.querySelectorAll('.color-btn').forEach(b => b.classList.remove('active'));
@@ -349,7 +348,6 @@
         });
     }
 
-    // PeerJS初期化
     function initPeer(customId, callback) {
         peer = new Peer(customId, { debug: 1 });
         peer.on('open', (id) => {
@@ -531,7 +529,7 @@
             items.push({ 
                 number: num, 
                 word: word, 
-                imgUrl: imgUrl, // 空白なら空文字のまま（白紙になる）
+                imgUrl: imgUrl, 
                 revealed: state.isRevealed,
                 good: existingItem ? (existingItem.good || 0) : 0,
                 bad: existingItem ? (existingItem.bad || 0) : 0,
@@ -682,7 +680,6 @@
                 `<div class="number-badge" onclick="toggleReveal(${card.subIdx}, ${card.itemIdx})">${card.number}</div>` : 
                 `<div class="hidden-num">？（非公開）</div>`;
 
-            // 画像URLがある場合のみimgタグを表示、なければ白紙のコンテナになる
             let imgTag = card.imgUrl ? `<img src="${card.imgUrl}" onerror="this.style.display='none';">` : ``;
 
             cardDiv.innerHTML = `
@@ -692,7 +689,6 @@
                 </div>
                 <div style="font-size:18px; margin: 6px 0;"><strong>${card.word || "（ワードなし）"}</strong></div>
                 
-                <!-- 画像 ＋ 落書き用キャンバスのオーバーレイコンテナ -->
                 <div class="canvas-container">
                     ${imgTag}
                     <canvas class="draw-canvas" id="canvas-${card.subIdx}-${card.itemIdx}"></canvas>
@@ -712,12 +708,11 @@
             `;
             container.appendChild(cardDiv);
 
-            // キャンバスの初期化＆イベントリスナー設定
             setupCanvas(`canvas-${card.subIdx}-${card.itemIdx}`, card.subIdx, card.itemIdx, card.canvasData);
         });
     }
 
-    // 各カードのキャンバス初期化と描画イベント処理
+    // ── ポインターイベント（マウス・タッチ・ペンタブ対応）を用いた描画処理 ──
     function setupCanvas(canvasId, subIdx, itemIdx, savedDataUrl) {
         const canvas = document.getElementById(canvasId);
         if(!canvas) return;
@@ -726,7 +721,6 @@
         canvas.width = canvas.offsetWidth;
         canvas.height = canvas.offsetHeight;
 
-        // 保存された落書きデータがあれば復元描画
         if(savedDataUrl) {
             const img = new Image();
             img.onload = () => {
@@ -741,8 +735,8 @@
         function startDrawing(e) {
             isDrawing = true;
             const rect = canvas.getBoundingClientRect();
-            const x = (e.clientX || e.touches[0].clientX) - rect.left;
-            const y = (e.clientY || e.touches[0].clientY) - rect.top;
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
             ctx.beginPath();
             ctx.moveTo(x, y);
         }
@@ -751,11 +745,11 @@
             if(!isDrawing) return;
             e.preventDefault();
             const rect = canvas.getBoundingClientRect();
-            const x = (e.clientX || e.touches[0].clientX) - rect.left;
-            const y = (e.clientY || e.touches[0].clientY) - rect.top;
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
 
             if(currentToolMode === 'eraser') {
-                ctx.strokeStyle = '#ffffff'; // 消しゴム（白で上描き）
+                ctx.strokeStyle = '#ffffff';
                 ctx.lineWidth = currentBrushSize * 2;
                 ctx.globalCompositeOperation = 'destination-out';
             } else {
@@ -770,7 +764,7 @@
             ctx.stroke();
         }
 
-        function stopDrawing() {
+        function stopDrawing(e) {
             if(!isDrawing) return;
             isDrawing = false;
             ctx.closePath();
@@ -783,14 +777,12 @@
             }
         }
 
-        canvas.onmousedown = startDrawing;
-        canvas.onmousemove = draw;
-        canvas.onmouseup = stopDrawing;
-        canvas.onmouseleave = stopDrawing;
-
-        canvas.ontouchstart = startDrawing;
-        canvas.ontouchmove = draw;
-        canvas.ontouchend = stopDrawing;
+        // Pointer Events を使用（マウス・タッチ・ペンタブすべての入力を網羅）
+        canvas.onpointerdown = startDrawing;
+        canvas.onpointermove = draw;
+        canvas.onpointerup = stopDrawing;
+        canvas.onpointercancel = stopDrawing;
+        canvas.onpointerleave = stopDrawing;
     }
 
     function clearCardCanvas(subIdx, itemIdx) {
