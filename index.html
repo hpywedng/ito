@@ -47,7 +47,7 @@
         .hidden { display: none !important; }
         .flex { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
         
-        /* プレイヤーバッジ */
+        /* プレイヤーバッジ＆アイコン */
         .player-badge {
             display: inline-flex;
             align-items: center;
@@ -58,16 +58,31 @@
             margin: 2px 4px;
             font-weight: bold;
             color: #1a252f;
+            gap: 6px;
+        }
+        .player-avatar-small {
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            object-fit: cover;
+            background: #20b2aa;
+            color: #fff;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+            font-weight: bold;
+            border: 1px solid #fff;
         }
         .player-badge .remove-btn {
-            margin-left: 6px;
+            margin-left: 4px;
             color: #e74c3c;
             cursor: pointer;
             font-weight: bold;
         }
 
         /* 場のカード一覧（テーブルエリア） */
-        #field-container { display: flex; gap: 20px; flex-wrap: wrap; margin-top: 15px; }
+        #field-container, .archive-field-container { display: flex; gap: 20px; flex-wrap: wrap; margin-top: 15px; }
         .field-card { 
             background: #ffffff; 
             border: 2px solid var(--primary); 
@@ -79,7 +94,7 @@
             box-shadow: 0 4px 12px rgba(0,0,0,0.06);
         }
         
-        /* 画像と落書きキャンバスのコンテナ */
+        /* 画像・動画サムネイルと落書きキャンバスのコンテナ */
         .canvas-container {
             position: relative;
             width: 100%;
@@ -91,15 +106,15 @@
             overflow: hidden;
             touch-action: none;
         }
-        .field-card img { 
+        .field-card img, .field-card iframe { 
             width: 100%; 
             height: 100%; 
             object-fit: cover; 
             position: absolute; 
             top: 0; 
             left: 0; 
-            pointer-events: none; 
         }
+        .field-card img { pointer-events: none; }
         .draw-canvas {
             position: absolute;
             top: 0;
@@ -118,7 +133,6 @@
         .move-btns button { padding: 6px 10px; font-size: 13px; background: #7f8c8d; }
         .move-btns button:hover { background: #595f61; }
         
-        .card-action-row { margin-top: 6px; display: flex; justify-content: space-between; align-items: center; }
         .clear-canvas-btn { background: #e74c3c; font-size: 12px; padding: 4px 8px; margin: 0; }
         .clear-canvas-btn:hover { background: #c0392b; }
 
@@ -145,7 +159,6 @@
         .color-btn { width: 28px; height: 28px; border-radius: 50%; border: 2px solid #ccc; cursor: pointer; padding: 0; margin: 0; transition: transform 0.1s; }
         .color-btn.active { transform: scale(1.2); border-color: #2c3e50; box-shadow: 0 0 5px rgba(0,0,0,0.3); }
         
-        /* カスタムカラーピッカー（カラーサークル）のアイコンボタン */
         .color-picker-btn {
             width: 28px;
             height: 28px;
@@ -187,7 +200,12 @@
         <p style="font-size: 14px; color: #555;">部屋の主（ホスト）になる人はルームIDを確認して作成し、参加者はそのIDを入力して参加してください。</p>
         
         <div style="margin-bottom: 15px;">
-            <input type="text" id="player-name-input" placeholder="ハンドルネームを入力" value="プレイヤーネーム" style="width: 60%;">
+            <input type="text" id="player-name-input" placeholder="ハンドルネームを入力" value="プレイヤーネーム" style="width: 35%;">
+            <span style="display:inline-flex; align-items:center; gap:4px;">
+                <input type="text" id="player-avatar-input" placeholder="アイコン画像URL (任意)" style="width: 250px;">
+                <button type="button" onclick="pasteFromClipboard('player-avatar-input')" style="padding: 6px 10px; font-size: 13px;" title="クリップボードから貼り付け">📋 貼付</button>
+                <button type="button" onclick="clearInput('player-avatar-input')" style="padding: 6px 10px; font-size: 13px; background:#e74c3c;" title="クリア">×</button>
+            </span>
         </div>
 
         <div style="background: #e0f8f8; padding: 15px; border-radius: 8px; margin-bottom: 15px; border: 1px solid var(--border-color);">
@@ -212,6 +230,7 @@
             <button onclick="leaveGame()" style="background: #e74c3c; font-size: 14px;">🚪 退室する</button>
         </div>
         <hr style="border:0; border-top:1px solid #d1e7e7; margin: 15px 0;">
+        
         <div id="host-settings-area">
             <h3>ゲーム設定（ホストのみ変更可能）</h3>
             <label>親の決め方: 
@@ -232,13 +251,33 @@
         <div id="guest-waiting-notice" class="hidden">
             <p style="color: #555; font-weight: bold;">ホストがゲームを開始するのを待っています...</p>
         </div>
+
+        <hr style="border:0; border-top:1px solid #d1e7e7; margin: 20px 0;">
+
+        <!-- ロビー用大型共有落書きキャンバス -->
+        <div style="background: #fafdfd; border: 2px solid var(--primary); padding: 15px; border-radius: 10px; margin-top: 15px;">
+            <div style="display:flex; justify-content:space-between; align-items:center;">
+                <h3 style="margin-top: 0; color: #006666;">🎨 ロビー用 共有落書きボード</h3>
+                <button class="clear-canvas-btn" onclick="clearLobbyCanvas()">🧹 ボードをクリア</button>
+            </div>
+            <p style="font-size: 13px; color: #555;">みんなで自由に描き込んで交流しよう！</p>
+            <div style="position:relative; width:100%; height:320px; background:#fff; border:1px solid var(--border-color); border-radius:8px; overflow:hidden; touch-action:none;">
+                <canvas class="draw-canvas" id="lobby-draw-canvas"></canvas>
+            </div>
+        </div>
+
+        <!-- 直近ゲームのアーカイブ表示エリア -->
+        <div id="archive-section" class="hidden" style="margin-top: 30px;">
+            <hr style="border:0; border-top:2px solid var(--primary); margin: 25px 0;">
+            <h3 style="color: #006666;">📜 過去のゲーム結果（直近2ゲーム）</h3>
+            <div id="archive-container"></div>
+        </div>
     </div>
 
     <!-- 3. メインプレイ画面 -->
     <div id="game-screen" class="card hidden">
         <h2 id="theme-display" style="color: #008b8b;">お題: まだ決まっていません</h2>
         
-        <!-- 親プレイヤー用のお題入力エリア -->
         <div id="dealer-input-area" class="hidden" style="background: #e0f8f8; padding: 15px; border-radius: 8px; margin-bottom: 15px; border: 1px solid var(--primary);">
             <h3 style="color: #006666; margin-top:0;">👑 あなたは親プレイヤーです。お題を入力してください。</h3>
             <input type="text" id="theme-input" placeholder="お題を入力してください（例：コンビニといえば？）" style="width: 70%;">
@@ -261,7 +300,6 @@
                 <button class="color-btn" style="background: #00bcd4;" data-color="#00bcd4" title="水色"></button>
                 <button class="color-btn" style="background: #9b59b6;" data-color="#9b59b6" title="紫"></button>
                 <button class="color-btn" style="background: #ff69b4;" data-color="#ff69b4" title="ピンク"></button>
-                <!-- カラーサークル（カラーピッカーを開くボタン） -->
                 <button class="color-picker-btn" id="custom-color-trigger" title="カラーサークルから選ぶ"></button>
                 <input type="color" id="native-color-picker" value="#000000" style="display:none;" onchange="selectCustomColor(this.value)">
             </div>
@@ -285,7 +323,6 @@
 
             <div style="width: 1px; height: 25px; background: var(--border-color); margin: 0 5px;"></div>
 
-            <!-- 筆圧オン/オフ切り替えボタン -->
             <div class="tool-group">
                 <button class="mode-btn" id="pressure-toggle-btn" onclick="togglePressure()">筆圧: OFF</button>
             </div>
@@ -294,7 +331,7 @@
         <!-- 3-B. リアルタイム共有テーブル（上部） -->
         <div style="background: #fafdfd; border: 2px solid var(--primary); padding: 15px; border-radius: 10px; margin-bottom: 25px;">
             <h3 style="margin-top: 0; color: #006666;">🃏 場の共有テーブル（みんなの提出カード＆落書き）</h3>
-            <p style="font-size: 13px; color: #555;">ペンタブの筆圧対応やカラーサークルでの自由な色選択が可能です。並び替えやGood/BAD投票もできます。</p>
+            <p style="font-size: 13px; color: #555;">YouTubeリンクや画像URL、白紙に対応！画像をクリックするとYouTube動画が再生されます。</p>
             <div id="field-container"></div>
             
             <div style="margin-top: 20px; border-top: 1px dashed var(--border-color); padding-top: 15px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap;">
@@ -325,24 +362,82 @@
     
     let state = {
         players: [],
+        playerAvatars: {},
         dealerIndex: 0,
         theme: "",
         allSubmissions: [], 
         phase: "lobby",
         isRevealed: false,
-        playerHands: {}
+        playerHands: {},
+        lobbyCanvasData: ""
     };
+
+    let gameArchives = [];
 
     window.myInputValues = {}; 
     window.myCurrentName = "";
+    window.myAvatarUrl = "";
 
-    // ── お絵描きツールの設定状態 ──
+    // ── ツールバー設定 ──
     let currentDrawingColor = "#000000";
     let currentBrushSize = 5;
-    let currentToolMode = "pen"; // 'pen' or 'eraser'
-    let usePressure = false;     // 筆圧感知の有効/無効
+    let currentToolMode = "pen";
+    let usePressure = false;
 
-    // カラーパレットボタンのイベント
+    // クリップボードから貼り付け＆クリアの補助関数
+    async function pasteFromClipboard(inputId) {
+        try {
+            const text = await navigator.clipboard.readText();
+            const input = document.getElementById(inputId);
+            if(input) {
+                input.value = text;
+                input.dispatchEvent(new Event('input')); // プレビュー等を連動させる
+            }
+        } catch(err) {
+            alert("クリップボードの読み取りに失敗しました。ブラウザの権限設定をご確認ください。");
+        }
+    }
+
+    function clearInput(inputId) {
+        const input = document.getElementById(inputId);
+        if(input) {
+            input.value = "";
+            input.dispatchEvent(new Event('input'));
+        }
+    }
+
+    // YouTubeのURLから動画IDを抽出する関数
+    function getYoutubeEmbedHtml(url, isPlaying) {
+        let videoId = "";
+        if(!url) return null;
+
+        // youtu.be/ID や youtube.com/watch?v=ID や youtube.com/embed/ID に対応
+        const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|\&v=)([^#\&\?]*).*/;
+        const match = url.match(regExp);
+        if (match && match[2].length === 11) {
+            videoId = match[2];
+        }
+
+        if(!videoId) return null;
+
+        if(isPlaying) {
+            // 再生中の場合はiframe埋め込み
+            return `<iframe src="https://www.youtube.com/embed/${videoId}?autoplay=1" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen style="width:100%; height:100%; position:absolute; top:0; left:0; border:0;"></iframe>`;
+        } else {
+            // サムネイル表示（クリックで再生に切り替えられるようにする）
+            const thumbUrl = `https://img.youtube.com/vi/${videoId}/hqdefault.jpg`;
+            return `<div style="position:relative; width:100%; height:100%; cursor:pointer;" title="クリックしてYouTube動画を再生" onclick="playYoutubeVideo(this, '${videoId}')">
+                <img src="${thumbUrl}" style="width:100%; height:100%; object-fit:cover; position:absolute; top:0; left:0;">
+                <div style="position:absolute; top:50%; left:50%; transform:translate(-50%, -50%); background:rgba(0,0,0,0.7); color:#fff; padding:8px 14px; border-radius:20px; font-size:14px; font-weight:bold; display:flex; align-items:center; gap:4px; pointer-events:none;">▶ 再生</div>
+            </div>`;
+        }
+    }
+
+    // クリックでYouTubeプレイヤーに切り替える関数
+    window.playYoutubeVideo = function(containerElement, videoId) {
+        containerElement.innerHTML = `<iframe src="https://www.youtube.com/embed/${videoId}?autoplay=1" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen style="width:100%; height:100%; position:absolute; top:0; left:0; border:0;"></iframe>`;
+    };
+
     document.querySelectorAll('.color-btn').forEach(btn => {
         btn.addEventListener('click', (e) => {
             document.querySelectorAll('.color-btn, .color-picker-btn').forEach(b => b.classList.remove('active'));
@@ -352,7 +447,6 @@
         });
     });
 
-    // カラーサークル（ピッカー）起動トリガー
     document.getElementById('custom-color-trigger').addEventListener('click', () => {
         document.getElementById('native-color-picker').click();
     });
@@ -360,9 +454,7 @@
     function selectCustomColor(hexColor) {
         currentDrawingColor = hexColor;
         document.querySelectorAll('.color-btn').forEach(b => b.classList.remove('active'));
-        const pickerBtn = document.getElementById('custom-color-trigger');
-        pickerBtn.classList.add('active');
-        // カラーサークルアイコンの背景を、選んだ色に少し合わせるかグラデーションのままにする
+        document.getElementById('custom-color-trigger').classList.add('active');
         setDrawingMode('pen');
     }
 
@@ -433,7 +525,7 @@
     function setupGuestConnection(c) {
         c.on('open', () => {
             document.getElementById("sync-status").innerText = "● ホストと接続完了";
-            c.send({ type: "JOIN", name: window.myCurrentName });
+            c.send({ type: "JOIN", name: window.myCurrentName, avatar: window.myAvatarUrl });
         });
         c.on('data', (data) => { handleIncomingData(data, null); });
         c.on('close', () => { alert("ホストとの接続が切断されました。"); });
@@ -442,7 +534,10 @@
     function handleIncomingData(data, senderConn) {
         if(isHost) {
             if(data.type === "JOIN") {
-                if(!state.players.includes(data.name)) { state.players.push(data.name); }
+                if(!state.players.includes(data.name)) {
+                    state.players.push(data.name);
+                }
+                state.playerAvatars[data.name] = data.avatar || "";
                 broadcastState();
             } else if(data.type === "UPDATE_STATE") {
                 state = data.state;
@@ -473,28 +568,35 @@
 
     function createRoom() {
         const nameInput = document.getElementById("player-name-input").value.trim();
+        const avatarInput = document.getElementById("player-avatar-input").value.trim();
         const rInput = document.getElementById("create-room-id-input").value.trim();
         if(!nameInput) return alert("名前を入力してください");
         if(!rInput) return alert("ルームIDを入力してください");
 
         window.myCurrentName = nameInput;
+        window.myAvatarUrl = avatarInput;
         isHost = true;
         document.getElementById("connection-mode-label").innerText = "ホスト（部屋の主）";
 
         const fullRoomId = "discord-ito-" + rInput;
         initPeer(fullRoomId, () => {
-            state.players.push(window.myCurrentName);
+            if(!state.players.includes(window.myCurrentName)) {
+                state.players.push(window.myCurrentName);
+            }
+            state.playerAvatars[window.myCurrentName] = window.myAvatarUrl;
             renderCurrentScreen();
         });
     }
 
     function joinRoom() {
         const nameInput = document.getElementById("player-name-input").value.trim();
+        const avatarInput = document.getElementById("player-avatar-input").value.trim();
         const rInput = document.getElementById("join-room-id-input").value.trim();
         if(!nameInput) return alert("名前を入力してください");
         if(!rInput) return alert("ルームIDを入力してください");
 
         window.myCurrentName = nameInput;
+        window.myAvatarUrl = avatarInput;
         isHost = false;
         document.getElementById("connection-mode-label").innerText = "ゲスト（参加者）";
         document.getElementById("host-share-notice").classList.add("hidden");
@@ -513,6 +615,7 @@
     function removePlayer(name) {
         if(!isHost) return;
         state.players = state.players.filter(p => p !== name);
+        delete state.playerAvatars[name];
         syncAndPush();
     }
 
@@ -625,6 +728,16 @@
         }
     }
 
+    function renderAvatarHtml(playerName) {
+        const avatarUrl = state.playerAvatars[playerName];
+        if(avatarUrl) {
+            return `<img src="${avatarUrl}" class="player-avatar-small" onerror="this.outerHTML='<span class=\\'player-avatar-small\\'>${playerName.charAt(0)}</span>';">`;
+        } else {
+            const initial = playerName ? playerName.charAt(0) : "?";
+            return `<span class="player-avatar-small">${initial}</span>`;
+        }
+    }
+
     function renderCurrentScreen() {
         document.getElementById("login-screen").classList.add("hidden");
         document.getElementById("lobby-screen").classList.add("hidden");
@@ -640,10 +753,15 @@
             state.players.forEach(p => {
                 const badge = document.createElement("span");
                 badge.className = "player-badge";
+                const avatarHtml = renderAvatarHtml(p);
                 let removeHtml = (isHost && p !== window.myCurrentName) ? `<span class="remove-btn" onclick="removePlayer('${p}')" title="このプレイヤーを削除">✕</span>` : '';
-                badge.innerHTML = `${p}${removeHtml}`;
+                badge.innerHTML = `${avatarHtml} ${p} ${removeHtml}`;
                 listContainer.appendChild(badge);
             });
+
+            setupLobbyCanvas();
+            renderArchives();
+
         } else if(state.phase === "play") {
             document.getElementById("game-screen").classList.remove("hidden");
             document.getElementById("theme-display").innerText = state.theme ? "お題: " + state.theme : "お題: まだ決まっていません";
@@ -666,7 +784,7 @@
 
             const submittedCount = state.allSubmissions.length;
             const totalPlayers = state.players.length;
-            document.getElementById("submission-status-text").innerText = `提出状況: ${submittedCount} /${totalPlayers} 人完了`;
+            document.getElementById("submission-status-text").innerText = `提出状況: ${submittedCount} / ${totalPlayers} 人完了`;
 
             renderField();
         }
@@ -691,23 +809,35 @@
             div.innerHTML = `
                 <p><strong>数字カード #${index+1}</strong>: <span style="color:#27ae60; font-size:22px; font-weight:bold;">${num}</span></p>
                 <label>答えのワード: <input type="text" id="word-${index}" value="${currentData.word}" placeholder="例：コンビニのコーヒー" oninput="updateInputVal(${index}, 'word', this.value)"></label><br>
-                <label>画像URL (空欄なら白紙): <input type="text" id="img-url-${index}" value="${currentData.imgUrl}" placeholder="https://example.com/image.jpg (空欄OK)" style="width: 55%;" oninput="updateInputVal(${index}, 'img-url', this.value); previewImage(${index})"></label>
+                <div style="display:flex; align-items:center; gap:6px; flex-wrap:wrap; margin-top:5px;">
+                    <label style="margin:0;">画像 or YouTube URL: <input type="text" id="img-url-${index}" value="${currentData.imgUrl}" placeholder="https://... (空欄なら白紙)" style="width: 320px;" oninput="updateInputVal(${index}, 'img-url', this.value); previewImage(${index})"></label>
+                    <button type="button" onclick="pasteFromClipboard('img-url-${index}'); previewImage(${index});" style="padding: 6px 10px; font-size: 13px;" title="クリップボードから貼り付け">📋 貼付</button>
+                    <button type="button" onclick="clearInput('img-url-${index}'); previewImage(${index});" style="padding: 6px 10px; font-size: 13px; background:#e74c3c;" title="クリア">×</button>
+                </div>
                 <div id="img-preview-${index}" style="margin-top:10px;">
-                    ${currentData.imgUrl ? `<img src="${currentData.imgUrl}" style="width:140px; height:140px; object-fit:cover; border-radius:8px;" onerror="this.style.display='none';">` : '<div style="width:140px; height:140px; background:#fff; border:1px solid #ccc; border-radius:8px; display:flex; align-items:center; justify-content:center; color:#888; font-size:12px;">(白紙カード)</div>'}
+                    ${renderMediaPreview(currentData.imgUrl)}
                 </div>
             `;
             container.appendChild(div);
         });
     }
 
+    function renderMediaPreview(url) {
+        if(!url) {
+            return '<div style="width:140px; height:140px; background:#fff; border:1px solid #ccc; border-radius:8px; display:flex; align-items:center; justify-content:center; color:#888; font-size:12px;">(白紙カード)</div>';
+        }
+        const ytHtml = getYoutubeEmbedHtml(url, false);
+        if(ytHtml) {
+            return `<div style="width:200px; height:120px; border-radius:8px; overflow:hidden; position:relative; border:1px solid #ccc;">${ytHtml}</div>`;
+        } else {
+            return `<img src="${url}" style="width:140px; height:140px; object-fit:cover; border-radius:8px;" onerror="this.onerror=null; this.parentNode.innerHTML='<div style=\\\'width:140px; height:140px; background:#fff; border:1px solid #ccc; border-radius:8px; display:flex; align-items:center; justify-content:center; color:#c0392b; font-size:11px;\\\'>読み込みエラー</div>';">`;
+        }
+    }
+
     function previewImage(index) {
         const url = document.getElementById(`img-url-${index}`).value.trim();
         const preview = document.getElementById(`img-preview-${index}`);
-        if(url) {
-            preview.innerHTML = `<img src="${url}" style="width:140px; height:140px; object-fit:cover; border-radius:8px;" onerror="this.onerror=null; this.innerHTML='<div style=\\\'width:140px; height:140px; background:#fff; border:1px solid #ccc; border-radius:8px; display:flex; align-items:center; justify-content:center; color:#c0392b; font-size:11px;\\\'>画像読み込みエラー</div>';">`;
-        } else {
-            preview.innerHTML = `<div style="width:140px; height:140px; background:#fff; border:1px solid #ccc; border-radius:8px; display:flex; align-items:center; justify-content:center; color:#888; font-size:12px;">(白紙カード)</div>`;
-        }
+        preview.innerHTML = renderMediaPreview(url);
     }
 
     function renderField() {
@@ -734,17 +864,30 @@
                 `<div class="number-badge" onclick="toggleReveal(${card.subIdx}, ${card.itemIdx})">${card.number}</div>` : 
                 `<div class="hidden-num">？（非公開）</div>`;
 
-            let imgTag = card.imgUrl ? `<img src="${card.imgUrl}" onerror="this.style.display='none';">` : ``;
+            let mediaTag = "";
+            if(card.imgUrl) {
+                const ytHtml = getYoutubeEmbedHtml(card.imgUrl, false);
+                if(ytHtml) {
+                    mediaTag = ytHtml;
+                } else {
+                    mediaTag = `<img src="${card.imgUrl}" onerror="this.style.display='none';">`;
+                }
+            }
+
+            const avatarHtml = renderAvatarHtml(card.playerName);
 
             cardDiv.innerHTML = `
                 <div style="display:flex; justify-content:space-between; align-items:center;">
-                    <small style="color:#008b8b; font-weight:bold; font-size:14px;">${card.playerName}</small>
+                    <div style="display:flex; align-items:center; gap:6px;">
+                        ${avatarHtml}
+                        <small style="color:#008b8b; font-weight:bold; font-size:14px;">${card.playerName}</small>
+                    </div>
                     <button class="clear-canvas-btn" onclick="clearCardCanvas(${card.subIdx}, ${card.itemIdx})">🧹 落書きクリア</button>
                 </div>
                 <div style="font-size:18px; margin: 6px 0;"><strong>${card.word || "（ワードなし）"}</strong></div>
                 
                 <div class="canvas-container">
-                    ${imgTag}
+                    ${mediaTag}
                     <canvas class="draw-canvas" id="canvas-${card.subIdx}-${card.itemIdx}"></canvas>
                 </div>
 
@@ -766,7 +909,85 @@
         });
     }
 
-    // ── ポインターイベント（筆圧感知対応）を用いた描画処理 ──
+    // ── ロビー用大型共有落書きボードの設定 ──
+    function setupLobbyCanvas() {
+        const canvas = document.getElementById('lobby-draw-canvas');
+        if(!canvas) return;
+        const ctx = canvas.getContext('2d');
+
+        canvas.width = canvas.offsetWidth;
+        canvas.height = canvas.offsetHeight;
+
+        if(state.lobbyCanvasData) {
+            const img = new Image();
+            img.onload = () => {
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                ctx.drawImage(img, 0, 0);
+            };
+            img.src = state.lobbyCanvasData;
+        }
+
+        let isDrawing = false;
+
+        function startDrawing(e) {
+            isDrawing = true;
+            const rect = canvas.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+            ctx.beginPath();
+            ctx.moveTo(x, y);
+        }
+
+        function draw(e) {
+            if(!isDrawing) return;
+            e.preventDefault();
+            const rect = canvas.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+
+            if(currentToolMode === 'eraser') {
+                ctx.strokeStyle = '#ffffff';
+                ctx.lineWidth = currentBrushSize * 2;
+                ctx.globalCompositeOperation = 'destination-out';
+            } else {
+                ctx.strokeStyle = currentDrawingColor;
+                ctx.globalCompositeOperation = 'source-over';
+                if(usePressure && e.pressure !== undefined && e.pressure > 0) {
+                    ctx.lineWidth = currentBrushSize * (e.pressure * 2);
+                } else {
+                    ctx.lineWidth = currentBrushSize;
+                }
+            }
+            ctx.lineCap = 'round';
+            ctx.lineJoin = 'round';
+
+            ctx.lineTo(x, y);
+            ctx.stroke();
+        }
+
+        function stopDrawing(e) {
+            if(!isDrawing) return;
+            isDrawing = false;
+            ctx.closePath();
+
+            state.lobbyCanvasData = canvas.toDataURL();
+            syncAndPush();
+        }
+
+        canvas.onpointerdown = startDrawing;
+        canvas.onpointermove = draw;
+        canvas.onpointerup = stopDrawing;
+        canvas.onpointercancel = stopDrawing;
+        canvas.onpointerleave = stopDrawing;
+    }
+
+    function clearLobbyCanvas() {
+        state.lobbyCanvasData = "";
+        syncAndPush();
+        setupLobbyCanvas();
+    }
+
+    // ── お絵描きキャンバス（カード用） ──
     function setupCanvas(canvasId, subIdx, itemIdx, savedDataUrl) {
         const canvas = document.getElementById(canvasId);
         if(!canvas) return;
@@ -809,10 +1030,7 @@
             } else {
                 ctx.strokeStyle = currentDrawingColor;
                 ctx.globalCompositeOperation = 'source-over';
-
-                // 筆圧（pressure）が取得できる場合（ペンタブなど）かつ筆圧ONの場合
                 if(usePressure && e.pressure !== undefined && e.pressure > 0) {
-                    // 筆圧に応じて太さを変動（最小0.5倍 〜 最大2.5倍）
                     ctx.lineWidth = currentBrushSize * (e.pressure * 2);
                 } else {
                     ctx.lineWidth = currentBrushSize;
@@ -898,6 +1116,16 @@
                 btn.innerText = "ゲームをリセットしてロビーに戻る";
                 btn.style.background = "#95a5a6";
             } else {
+                if(state.allSubmissions.length > 0) {
+                    gameArchives.unshift({
+                        theme: state.theme,
+                        submissions: JSON.parse(JSON.stringify(state.allSubmissions))
+                    });
+                    if(gameArchives.length > 2) {
+                        gameArchives.pop();
+                    }
+                }
+
                 state.phase = "lobby";
                 state.allSubmissions = [];
                 state.theme = "";
@@ -911,6 +1139,67 @@
         } else {
             alert("結果発表の操作はホスト（部屋の主）のみ行えます");
         }
+    }
+
+    function renderArchives() {
+        const section = document.getElementById("archive-section");
+        const container = document.getElementById("archive-container");
+        container.innerHTML = "";
+
+        if(gameArchives.length === 0) {
+            section.classList.add("hidden");
+            return;
+        }
+
+        section.classList.remove("hidden");
+
+        gameArchives.forEach((archive, gIdx) => {
+            const gameDiv = document.createElement("div");
+            gameDiv.style.background = "#fafdfd";
+            gameDiv.style.border = "1px solid var(--border-color)";
+            gameDiv.style.borderRadius = "10px";
+            gameDiv.style.padding = "15px";
+            gameDiv.style.marginBottom = "15px";
+
+            let cardsHtml = "";
+            archive.submissions.forEach(sub => {
+                sub.items.forEach(item => {
+                    const avatarHtml = renderAvatarHtml(sub.name);
+                    let mediaTag = "";
+                    if(item.imgUrl) {
+                        const ytHtml = getYoutubeEmbedHtml(item.imgUrl, false);
+                        if(ytHtml) {
+                            mediaTag = ytHtml;
+                        } else {
+                            mediaTag = `<img src="${item.imgUrl}" style="width:100%; height:100%; object-fit:cover; position:absolute; top:0; left:0;" onerror="this.style.display='none';">`;
+                        }
+                    } else {
+                        mediaTag = `<div style="width:100%; height:100%; background:#fff; position:absolute; top:0; left:0;"></div>`;
+                    }
+                    
+                    cardsHtml += `
+                        <div style="background:#fff; border:1px solid var(--primary); border-radius:10px; padding:12px; width:220px; text-align:center;">
+                            <div style="display:flex; align-items:center; gap:6px;">
+                                ${avatarHtml}
+                                <small style="color:#008b8b; font-weight:bold;">${sub.name}</small>
+                            </div>
+                            <div style="font-size:16px; margin:6px 0;"><strong>${item.word || "（なし）"}</strong></div>
+                            <div style="position:relative; width:100%; height:160px; background:#fff; border:1px solid #ccc; border-radius:6px; overflow:hidden;">
+                                ${mediaTag}
+                                <img src="${item.canvasData || ''}" style="position:absolute; top:0; left:0; width:100%; height:100%; pointer-events:none;">
+                            </div>
+                            <div style="font-size:22px; font-weight:bold; color:#27ae60; background:var(--accent); padding:4px; border-radius:6px; margin-top:8px;">${item.number}</div>
+                        </div>
+                    `;
+                });
+            });
+
+            gameDiv.innerHTML = `
+                <h4 style="color:#006666; margin-top:0;">ゲーム #${gameArchives.length - gIdx} お題: ${archive.theme || "（未設定）"}</h4>
+                <div class="archive-field-container">${cardsHtml}</div>
+            `;
+            container.appendChild(gameDiv);
+        });
     }
 </script>
 
