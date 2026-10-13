@@ -81,9 +81,16 @@
         .field-card img { width: 100%; height: 200px; object-fit: cover; border-radius: 8px; background: #e0f8f8; margin-top: 8px; }
         .number-badge { font-size: 26px; font-weight: bold; color: #27ae60; background: var(--accent); padding: 6px 12px; border-radius: 8px; display: inline-block; margin-top: 8px; cursor: pointer; border: 1px solid var(--accent-border); }
         .hidden-num { font-size: 18px; font-weight: bold; color: #7f8c8d; background: #ecf0f1; padding: 6px 12px; border-radius: 8px; display: inline-block; margin-top: 8px; }
+        
+        /* 操作・投票ボタンエリア */
         .move-btns { margin-top: 10px; display: flex; justify-content: space-between; }
         .move-btns button { padding: 6px 12px; font-size: 14px; background: #7f8c8d; }
         .move-btns button:hover { background: #595f61; }
+        
+        .vote-area { margin-top: 8px; display: flex; justify-content: space-around; background: #f0f8f8; padding: 6px; border-radius: 6px; border: 1px solid var(--border-color); }
+        .vote-btn { background: #fff; border: 1px solid var(--border-color); padding: 4px 10px; border-radius: 4px; font-size: 14px; cursor: pointer; color: #2c3e50; display: flex; align-items: center; gap: 4px; }
+        .vote-btn:hover { background: #e0f8f8; }
+
         .sync-bar { background: var(--primary); padding: 10px 15px; border-radius: 8px; margin-bottom: 15px; display: flex; justify-content: space-between; align-items: center; color: #1a252f; font-weight: bold; border: 1px solid #85e3e3; }
         .status-msg { font-size: 14px; color: #006666; margin-left: 10px; font-weight: bold; }
     </style>
@@ -167,7 +174,7 @@
         <!-- 3-A. リアルタイム共有テーブル（上部） -->
         <div style="background: #fafdfd; border: 2px solid var(--primary); padding: 15px; border-radius: 10px; margin-bottom: 25px;">
             <h3 style="margin-top: 0; color: #006666;">🃏 場の共有テーブル（みんなの提出カード）</h3>
-            <p style="font-size: 13px; color: #555;">提出されたカードがここにリアルタイムで並びます。左右のボタンで自由に並び順を調整できます。</p>
+            <p style="font-size: 13px; color: #555;">提出されたカードがここにリアルタイムで並びます。並び順の変更や、Good/BADの意思表示ができます。</p>
             <div id="field-container"></div>
             
             <div style="margin-top: 20px; border-top: 1px dashed var(--border-color); padding-top: 15px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap;">
@@ -203,7 +210,7 @@
         allSubmissions: [], 
         phase: "lobby",
         isRevealed: false,
-        playerHands: {} // 各プレイヤーに割り当てられた数字のマップ { "名前": [番号1, 番号2...] }
+        playerHands: {}
     };
 
     window.myInputValues = {}; 
@@ -359,18 +366,15 @@
         const count = parseInt(document.getElementById("card-count").value);
         const dealerMode = document.getElementById("dealer-mode").value;
         
-        // 親の決定
         if(dealerMode === "random") {
             state.dealerIndex = Math.floor(Math.random() * state.players.length);
         } else {
             state.dealerIndex = (state.dealerIndex + 1) % state.players.length;
         }
 
-        // 1〜100の数字をシャッフル
         let numbers = Array.from({length: 100}, (_, i) => i + 1);
         numbers.sort(() => Math.random() - 0.5);
         
-        // 全プレイヤーに手札を分配して記録
         state.playerHands = {};
         state.players.forEach(playerName => {
             let pHands = [];
@@ -385,7 +389,7 @@
         state.theme = "";
         state.allSubmissions = [];
         state.isRevealed = false;
-        state.phase = "play"; // メインプレイ画面へ
+        state.phase = "play";
         
         syncAndPush();
     }
@@ -405,7 +409,6 @@
     }
 
     function submitHands() {
-        // 自分の割り当てられた本当の数字を取得
         const myAssignedNumbers = state.playerHands[window.myCurrentName] || [50];
         let items = [];
 
@@ -416,7 +419,21 @@
             const word = wordInput ? wordInput.value.trim() : (window.myInputValues[index]?.word || "");
             const imgUrl = imgUrlInput ? imgUrlInput.value.trim() : (window.myInputValues[index]?.imgUrl || "https://picsum.photos/200/200");
             
-            items.push({ number: num, word: word, imgUrl: imgUrl || "https://picsum.photos/200/200", revealed: state.isRevealed });
+            // 既存の投票数を引き継ぐ（再提出時）
+            let existingItem = null;
+            const oldSub = state.allSubmissions.find(s => s.name === window.myCurrentName);
+            if(oldSub && oldSub.items[index]) {
+                existingItem = oldSub.items[index];
+            }
+
+            items.push({ 
+                number: num, 
+                word: word, 
+                imgUrl: imgUrl || "https://picsum.photos/200/200", 
+                revealed: state.isRevealed,
+                good: existingItem ? (existingItem.good || 0) : 0,
+                bad: existingItem ? (existingItem.bad || 0) : 0
+            });
         });
 
         const existingIdx = state.allSubmissions.findIndex(s => s.name === window.myCurrentName);
@@ -428,6 +445,35 @@
 
         syncAndPush();
         renderCurrentScreen();
+    }
+
+    // Good / BAD 投票用関数
+    function voteCard(flatIndex, type) {
+        let flatCards = [];
+        state.allSubmissions.forEach((sub) => {
+            sub.items.forEach((item) => {
+                flatCards.push(item);
+            });
+        });
+
+        if(flatCards[flatIndex]) {
+            if(type === 'good') {
+                flatCards[flatIndex].good = (flatCards[flatIndex].good || 0) + 1;
+            } else if(type === 'bad') {
+                flatCards[flatIndex].bad = (flatCards[flatIndex].bad || 0) + 1;
+            }
+
+            // state側に反映
+            let cursor = 0;
+            state.allSubmissions.forEach(sub => {
+                for(let i=0; i<sub.items.length; i++) {
+                    sub.items[i] = flatCards[cursor++];
+                }
+            });
+
+            syncAndPush();
+            renderField();
+        }
     }
 
     function renderCurrentScreen() {
@@ -460,10 +506,8 @@
                 document.getElementById("dealer-input-area").classList.add("hidden");
             }
 
-            // 手札入力フォームの描画更新（常に最新の手札を反映）
             renderMyHands();
 
-            // 提出済みかどうかの表示切り替え
             const hasSubmitted = state.allSubmissions.some(s => s.name === window.myCurrentName);
             if(hasSubmitted) {
                 document.getElementById("submitted-notice-area").classList.remove("hidden");
@@ -471,12 +515,10 @@
                 document.getElementById("submitted-notice-area").classList.add("hidden");
             }
 
-            // 提出状況カウンターの更新
             const submittedCount = state.allSubmissions.length;
             const totalPlayers = state.players.length;
             document.getElementById("submission-status-text").innerText = `提出状況: ${submittedCount} / ${totalPlayers} 人完了`;
 
-            // 場のテーブルを描画
             renderField();
         }
     }
@@ -548,9 +590,15 @@
                 <div style="font-size:18px; margin: 8px 0;"><strong>${card.word || "（ワードなし）"}</strong></div>
                 <img src="${card.imgUrl}" onerror="this.src='https://picsum.photos/200/200';">
                 <div>${numDisplay}</div>
+                
                 <div class="move-btns">
                     <button onclick="moveCardItem(${idx}, -1)">← 左へ</button>
                     <button onclick="moveCardItem(${idx}, 1)">右へ →</button>
+                </div>
+
+                <div class="vote-area">
+                    <button class="vote-btn" onclick="voteCard(${idx}, 'good')">👍 Good <span style="font-weight:bold; color:#27ae60;">${card.good || 0}</span></button>
+                    <button class="vote-btn" onclick="voteCard(${idx}, 'bad')">👎 BAD <span style="font-weight:bold; color:#e74c3c;">${card.bad || 0}</span></button>
                 </div>
             `;
             container.appendChild(cardDiv);
@@ -567,6 +615,12 @@
 
         const targetIdx = flatIndex + direction;
         if(targetIdx < 0 || targetIdx >= flatCards.length) return;
+
+        // 位置が変更されたため、すべてのカードの Good / BAD カウントを 0 にリセット
+        flatCards.forEach(card => {
+            card.good = 0;
+            card.bad = 0;
+        });
 
         let temp = flatCards[flatIndex];
         flatCards[flatIndex] = flatCards[targetIdx];
@@ -593,7 +647,6 @@
         if(isHost) {
             const btn = document.getElementById("phase-btn");
             if(!state.isRevealed) {
-                // 結果発表（全公開）モードへ
                 state.isRevealed = true;
                 state.allSubmissions.forEach(sub => {
                     sub.items.forEach(item => {
@@ -603,7 +656,6 @@
                 btn.innerText = "ゲームをリセットしてロビーに戻る";
                 btn.style.background = "#95a5a6";
             } else {
-                // リセットしてロビーへ戻る
                 state.phase = "lobby";
                 state.allSubmissions = [];
                 state.theme = "";
