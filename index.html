@@ -47,7 +47,7 @@
         .hidden { display: none !important; }
         .flex { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
         
-        /* プレイヤーバッジ＆アイコン（拡大崩れ防止の設定を追加） */
+        /* プレイヤーバッジ＆アイコン（固定サイズ化） */
         .player-badge {
             display: inline-flex;
             align-items: center;
@@ -78,7 +78,7 @@
             font-size: 12px;
             font-weight: bold;
             border: 1px solid #fff;
-            box-sizing: border-color;
+            box-sizing: border-box;
         }
         .player-badge .remove-btn {
             margin-left: 4px;
@@ -100,7 +100,6 @@
             box-shadow: 0 4px 12px rgba(0,0,0,0.06);
         }
         
-        /* 画像・動画サムネイルと落書きキャンバスのコンテナ */
         .canvas-container {
             position: relative;
             width: 100%;
@@ -134,7 +133,6 @@
         .number-badge { font-size: 26px; font-weight: bold; color: #27ae60; background: var(--accent); padding: 6px 12px; border-radius: 8px; display: inline-block; margin-top: 8px; cursor: pointer; border: 1px solid var(--accent-border); }
         .hidden-num { font-size: 18px; font-weight: bold; color: #7f8c8d; background: #ecf0f1; padding: 6px 12px; border-radius: 8px; display: inline-block; margin-top: 8px; }
         
-        /* 操作・投票ボタンエリア */
         .move-btns { margin-top: 10px; display: flex; justify-content: space-between; }
         .move-btns button { padding: 6px 10px; font-size: 13px; background: #7f8c8d; }
         .move-btns button:hover { background: #595f61; }
@@ -232,7 +230,7 @@
         <h2>ロビー <span style="font-size: 14px; font-weight: normal; color: #555;">(ルームID: <span id="display-room-id" style="font-weight:bold; color:#006666; user-select: all;"></span>)</span></h2>
         <p style="font-size: 13px; color: #c0392b;" id="host-share-notice">※このルームIDをDiscordのメンバーに共有してください。</p>
         
-        <!-- 順序 1: 参加プレイヤー一覧 -->
+        <!-- 1. 参加プレイヤー一覧 -->
         <p>参加メンバー: <span id="player-list"></span></p>
         <div class="flex" style="margin-bottom: 15px;">
             <button onclick="leaveGame()" style="background: #e74c3c; font-size: 14px;">🚪 退室する</button>
@@ -240,7 +238,7 @@
 
         <hr style="border:0; border-top:1px solid #d1e7e7; margin: 15px 0;">
 
-        <!-- 順序 2: ロビー共有キャンバス（ツールバー付き） -->
+        <!-- 2. ロビー共有キャンバス -->
         <div style="background: #fafdfd; border: 2px solid var(--primary); padding: 15px; border-radius: 10px; margin-bottom: 20px;">
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 10px;">
                 <h3 style="margin: 0; color: #006666;">🎨 ロビー用 共有落書きボード</h3>
@@ -295,7 +293,7 @@
 
         <hr style="border:0; border-top:1px solid #d1e7e7; margin: 15px 0;">
 
-        <!-- 順序 3: ゲーム設定 -->
+        <!-- 3. ゲーム設定 -->
         <div id="host-settings-area">
             <h3>ゲーム設定（ホストのみ変更可能）</h3>
             <label>親の決め方: 
@@ -317,7 +315,7 @@
             <p style="color: #555; font-weight: bold;">ホストがゲームを開始するのを待っています...</p>
         </div>
 
-        <!-- 順序 4: 過去ログ（直近ゲームのアーカイブ） -->
+        <!-- 4. 過去ログ（全員同期） -->
         <div id="archive-section" class="hidden" style="margin-top: 25px;">
             <hr style="border:0; border-top:2px solid var(--primary); margin: 25px 0;">
             <h3 style="color: #006666;">📜 過去のゲーム結果（直近2ゲーム）</h3>
@@ -411,19 +409,19 @@
     let isHost = false;
     let myRoomId = "";
     
+    // 全員共有オブジェクト（Archivesもstate内に組み込んで全員で同期）
     let state = {
         players: [],
         playerAvatars: {},
         dealerIndex: 0,
         theme: "",
-        allSubmissions: [], 
+        fieldCards: [], // ★場に並んでいる全カードの配列 [{playerName, number, word, imgUrl, canvasData, good, bad, revealed}]
         phase: "lobby",
         isRevealed: false,
         playerHands: {},
-        lobbyCanvasData: ""
+        lobbyCanvasData: "",
+        archives: [] // ★過去ログをstate内で全員共有
     };
-
-    let gameArchives = [];
 
     window.myInputValues = {}; 
     window.myCurrentName = "";
@@ -677,7 +675,7 @@
 
         window.myInputValues = {};
         state.theme = "";
-        state.allSubmissions = [];
+        state.fieldCards = []; // フィールドカード初期化
         state.isRevealed = false;
         state.phase = "play";
         
@@ -700,7 +698,6 @@
 
     function submitHands() {
         const myAssignedNumbers = state.playerHands[window.myCurrentName] || [50];
-        let items = [];
 
         myAssignedNumbers.forEach((num, index) => {
             const wordInput = document.getElementById(`word-${index}`);
@@ -709,53 +706,39 @@
             const word = wordInput ? wordInput.value.trim() : (window.myInputValues[index]?.word || "");
             const imgUrl = imgUrlInput ? imgUrlInput.value.trim() : (window.myInputValues[index]?.imgUrl || "");
             
-            let existingItem = null;
-            const oldSub = state.allSubmissions.find(s => s.name === window.myCurrentName);
-            if(oldSub && oldSub.items[index]) {
-                existingItem = oldSub.items[index];
-            }
+            // 既存カードの検索（自分かつ該当インデックスのもの）
+            const existingIdx = state.fieldCards.findIndex(c => c.playerName === window.myCurrentName && c.handIndex === index);
 
-            items.push({ 
-                number: num, 
-                word: word, 
-                imgUrl: imgUrl, 
+            const cardData = {
+                playerName: window.myCurrentName,
+                handIndex: index,
+                number: num,
+                word: word,
+                imgUrl: imgUrl,
                 revealed: state.isRevealed,
-                good: existingItem ? (existingItem.good || 0) : 0,
-                bad: existingItem ? (existingItem.bad || 0) : 0,
-                canvasData: existingItem ? (existingItem.canvasData || "") : ""
-            });
-        });
+                good: existingIdx >= 0 ? state.fieldCards[existingIdx].good : 0,
+                bad: existingIdx >= 0 ? state.fieldCards[existingIdx].bad : 0,
+                canvasData: existingIdx >= 0 ? state.fieldCards[existingIdx].canvasData : ""
+            };
 
-        const existingIdx = state.allSubmissions.findIndex(s => s.name === window.myCurrentName);
-        if(existingIdx >= 0) {
-            state.allSubmissions[existingIdx].items = items;
-        } else {
-            state.allSubmissions.push({ name: window.myCurrentName, items: items });
-        }
+            if(existingIdx >= 0) {
+                state.fieldCards[existingIdx] = cardData;
+            } else {
+                state.fieldCards.push(cardData);
+            }
+        });
 
         syncAndPush();
         renderCurrentScreen();
     }
 
-    function voteCard(flatIndex, type) {
-        // 並び替え後のフラットなカード配列から、該当カードの所有者名とアイテムインデックスを特定して投票を反映
-        let flatCards = [];
-        state.allSubmissions.forEach((sub) => {
-            sub.items.forEach((item) => { flatCards.push(item); });
-        });
-
-        if(flatCards[flatIndex]) {
+    function voteCard(cardIndex, type) {
+        if(state.fieldCards[cardIndex]) {
             if(type === 'good') {
-                flatCards[flatIndex].good = (flatCards[flatIndex].good || 0) + 1;
+                state.fieldCards[cardIndex].good = (state.fieldCards[cardIndex].good || 0) + 1;
             } else if(type === 'bad') {
-                flatCards[flatIndex].bad = (flatCards[flatIndex].bad || 0) + 1;
+                state.fieldCards[cardIndex].bad = (state.fieldCards[cardIndex].bad || 0) + 1;
             }
-
-            let cursor = 0;
-            state.allSubmissions.forEach(sub => {
-                for(let i=0; i<sub.items.length; i++) { sub.items[i] = flatCards[cursor++]; }
-            });
-
             syncAndPush();
             renderField();
         }
@@ -808,16 +791,17 @@
 
             renderMyHands();
 
-            const hasSubmitted = state.allSubmissions.some(s => s.name === window.myCurrentName);
+            const hasSubmitted = state.fieldCards.some(c => c.playerName === window.myCurrentName);
             if(hasSubmitted) {
                 document.getElementById("submitted-notice-area").classList.remove("hidden");
             } else {
                 document.getElementById("submitted-notice-area").classList.add("hidden");
             }
 
-            const submittedCount = state.allSubmissions.length;
+            // ユニークな提出人数をカウント
+            const submittedPlayers = new Set(state.fieldCards.map(c => c.playerName)).size;
             const totalPlayers = state.players.length;
-            document.getElementById("submission-status-text").innerText = `提出状況: ${submittedCount} / ${totalPlayers} 人完了`;
+            document.getElementById("submission-status-text").innerText = `提出状況: ${submittedPlayers} / ${totalPlayers} 人完了`;
 
             renderField();
         }
@@ -877,25 +861,17 @@
         const container = document.getElementById("field-container");
         container.innerHTML = "";
 
-        // 提出カードをフラット化して管理（並び順を保持するため subIdx と itemIdx を保持）
-        let flatCards = [];
-        state.allSubmissions.forEach((sub, sIdx) => {
-            sub.items.forEach((item, iIdx) => {
-                flatCards.push({ subIdx: sIdx, itemIdx: iIdx, ...item, playerName: sub.name });
-            });
-        });
-
-        if(flatCards.length === 0) {
+        if(!state.fieldCards || state.fieldCards.length === 0) {
             container.innerHTML = `<p style="color: #7f8c8d; font-style: italic;">まだ誰もカードを提出していません。下からカードを出してみましょう！</p>`;
             return;
         }
 
-        flatCards.forEach((card, idx) => {
+        state.fieldCards.forEach((card, idx) => {
             const cardDiv = document.createElement("div");
             cardDiv.className = "field-card";
             
             let numDisplay = (card.revealed || state.isRevealed) ? 
-                `<div class="number-badge" onclick="toggleReveal(${card.subIdx}, ${card.itemIdx})">${card.number}</div>` : 
+                `<div class="number-badge" onclick="toggleReveal(${idx})">${card.number}</div>` : 
                 `<div class="hidden-num">？（非公開）</div>`;
 
             const ytId = isYoutubeUrl(card.imgUrl);
@@ -918,13 +894,13 @@
                         ${avatarHtml}
                         <small style="color:#008b8b; font-weight:bold; font-size:14px;">${card.playerName}</small>
                     </div>
-                    ${!isVideo ? `<button class="clear-canvas-btn" onclick="clearCardCanvas(${card.subIdx},${card.itemIdx})">🧹 落書きクリア</button>` : `<small style="color:#e74c3c; font-weight:bold;">🎥 YouTube動画</small>`}
+                    ${!isVideo ? `<button class="clear-canvas-btn" onclick="clearCardCanvas(${idx})">🧹 落書きクリア</button>` : `<small style="color:#e74c3c; font-weight:bold;">🎥 YouTube動画</small>`}
                 </div>
                 <div style="font-size:18px; margin: 6px 0;"><strong>${card.word || "（ワードなし）"}</strong></div>
                 
                 <div class="canvas-container">
                     ${mediaTag}
-                    <canvas class="draw-canvas" id="canvas-${card.subIdx}-${card.itemIdx}" style="${canvasStyle}"></canvas>
+                    <canvas class="draw-canvas" id="canvas-${idx}" style="${canvasStyle}"></canvas>
                 </div>
 
                 <div>${numDisplay}</div>
@@ -942,7 +918,7 @@
             container.appendChild(cardDiv);
 
             if(!isVideo) {
-                setupCanvas(`canvas-${card.subIdx}-${card.itemIdx}`, card.subIdx, card.itemIdx, card.canvasData);
+                setupCanvas(`canvas-${idx}`, idx, card.canvasData);
             }
         });
     }
@@ -1024,7 +1000,7 @@
         setupLobbyCanvas();
     }
 
-    function setupCanvas(canvasId, subIdx, itemIdx, savedDataUrl) {
+    function setupCanvas(canvasId, cardIndex, savedDataUrl) {
         const canvas = document.getElementById(canvasId);
         if(!canvas) return;
         const ctx = canvas.getContext('2d');
@@ -1085,9 +1061,8 @@
             ctx.closePath();
 
             const dataUrl = canvas.toDataURL();
-            const sub = state.allSubmissions[subIdx];
-            if(sub && sub.items[itemIdx]) {
-                sub.items[itemIdx].canvasData = dataUrl;
+            if(state.fieldCards[cardIndex]) {
+                state.fieldCards[cardIndex].canvasData = dataUrl;
                 syncAndPush();
             }
         }
@@ -1099,46 +1074,40 @@
         canvas.onpointerleave = stopDrawing;
     }
 
-    function clearCardCanvas(subIdx, itemIdx) {
-        const sub = state.allSubmissions[subIdx];
-        if(sub && sub.items[itemIdx]) {
-            sub.items[itemIdx].canvasData = "";
+    function clearCardCanvas(cardIndex) {
+        if(state.fieldCards[cardIndex]) {
+            state.fieldCards[cardIndex].canvasData = "";
             syncAndPush();
             renderField();
         }
     }
 
-    function moveCardItem(flatIndex, direction) {
-        let flatCards = [];
-        state.allSubmissions.forEach((sub) => {
-            sub.items.forEach((item) => { flatCards.push(item); });
-        });
+    // ★修正: 並び替え時、所有者名（playerName）やアイコンを含めたカードオブジェクト丸ごと入れ替える
+    function moveCardItem(currentIndex, direction) {
+        const targetIndex = currentIndex + direction;
+        if(targetIndex < 0 || targetIndex >= state.fieldCards.length) return;
 
-        const targetIdx = flatIndex + direction;
-        if(targetIdx < 0 || targetIdx >= flatCards.length) return;
+        // 票数をリセット
+        state.fieldCards[currentIndex].good = 0;
+        state.fieldCards[currentIndex].bad = 0;
+        state.fieldCards[targetIndex].good = 0;
+        state.fieldCards[targetIndex].bad = 0;
 
-        flatCards.forEach(card => {
-            card.good = 0;
-            card.bad = 0;
-        });
-
-        let temp = flatCards[flatIndex];
-        flatCards[flatIndex] = flatCards[targetIdx];
-        flatCards[targetIdx] = temp;
-
-        let cursor = 0;
-        state.allSubmissions.forEach(sub => {
-            for(let i=0; i<sub.items.length; i++) { sub.items[i] = flatCards[cursor++]; }
-        });
+        // 要素を直接入れ替え
+        const temp = state.fieldCards[currentIndex];
+        state.fieldCards[currentIndex] = state.fieldCards[targetIndex];
+        state.fieldCards[targetIndex] = temp;
 
         syncAndPush();
         renderField();
     }
 
-    function toggleReveal(subIdx, itemIdx) {
-        state.allSubmissions[subIdx].items[itemIdx].revealed = !state.allSubmissions[subIdx].items[itemIdx].revealed;
-        syncAndPush();
-        renderField();
+    function toggleReveal(cardIndex) {
+        if(state.fieldCards[cardIndex]) {
+            state.fieldCards[cardIndex].revealed = !state.fieldCards[cardIndex].revealed;
+            syncAndPush();
+            renderField();
+        }
     }
 
     function nextPhase() {
@@ -1146,35 +1115,24 @@
             const btn = document.getElementById("phase-btn");
             if(!state.isRevealed) {
                 state.isRevealed = true;
-                state.allSubmissions.forEach(sub => {
-                    sub.items.forEach(item => { item.revealed = true; });
-                });
+                state.fieldCards.forEach(card => { card.revealed = true; });
                 btn.innerText = "ゲームをリセットしてロビーに戻る";
                 btn.style.background = "#95a5a6";
             } else {
-                if(state.allSubmissions.length > 0) {
-                    // ★修正: アーカイブ保存時に、並び替えられたフラットカードの状態・所有者名を完全に保持した形式で格納
-                    let flatCardsForArchive = [];
-                    state.allSubmissions.forEach(sub => {
-                        sub.items.forEach(item => {
-                            flatCardsForArchive.push({
-                                playerName: sub.name,
-                                ...item
-                            });
-                        });
-                    });
-
-                    gameArchives.unshift({
+                // ゲーム終了時：現在のフィールドカードの状態（所有者名・画像・数字・落書き）をそのままアーカイブに記録
+                if(state.fieldCards.length > 0) {
+                    if(!state.archives) state.archives = [];
+                    state.archives.unshift({
                         theme: state.theme,
-                        flatCards: flatCardsForArchive
+                        cards: JSON.parse(JSON.stringify(state.fieldCards))
                     });
-                    if(gameArchives.length > 2) {
-                        gameArchives.pop();
+                    if(state.archives.length > 2) {
+                        state.archives.pop(); // 直近2ゲーム分まで保持
                     }
                 }
 
                 state.phase = "lobby";
-                state.allSubmissions = [];
+                state.fieldCards = [];
                 state.theme = "";
                 state.isRevealed = false;
                 state.playerHands = {};
@@ -1193,14 +1151,14 @@
         const container = document.getElementById("archive-container");
         container.innerHTML = "";
 
-        if(gameArchives.length === 0) {
+        if(!state.archives || state.archives.length === 0) {
             section.classList.add("hidden");
             return;
         }
 
         section.classList.remove("hidden");
 
-        gameArchives.forEach((archive, gIdx) => {
+        state.archives.forEach((archive, gIdx) => {
             const gameDiv = document.createElement("div");
             gameDiv.style.background = "#fafdfd";
             gameDiv.style.border = "1px solid var(--border-color)";
@@ -1209,18 +1167,17 @@
             gameDiv.style.marginBottom = "15px";
 
             let cardsHtml = "";
-            // ★修正: 保存されたフラットカード（正しい所有者名が紐づいた状態）からダイレクトに描画
-            archive.flatCards.forEach(item => {
-                const avatarHtml = renderAvatarHtml(item.playerName);
-                const ytId = isYoutubeUrl(item.imgUrl);
+            archive.cards.forEach(card => {
+                const avatarHtml = renderAvatarHtml(card.playerName);
+                const ytId = isYoutubeUrl(card.imgUrl);
                 let mediaTag = "";
                 let isVideo = false;
 
                 if(ytId) {
                     mediaTag = getYoutubeIframeHtml(ytId);
                     isVideo = true;
-                } else if(item.imgUrl) {
-                    mediaTag = `<img src="${item.imgUrl}" style="width:100%; height:100%; object-fit:cover; position:absolute; top:0; left:0;" onerror="this.style.display='none';">`;
+                } else if(card.imgUrl) {
+                    mediaTag = `<img src="${card.imgUrl}" style="width:100%; height:100%; object-fit:cover; position:absolute; top:0; left:0;" onerror="this.style.display='none';">`;
                 } else {
                     mediaTag = `<div style="width:100%; height:100%; background:#fff; position:absolute; top:0; left:0;"></div>`;
                 }
@@ -1229,20 +1186,20 @@
                     <div style="background:#fff; border:1px solid var(--primary); border-radius:10px; padding:12px; width:220px; text-align:center;">
                         <div style="display:flex; align-items:center; gap:6px;">
                             ${avatarHtml}
-                            <small style="color:#008b8b; font-weight:bold;">${item.playerName}</small>
+                            <small style="color:#008b8b; font-weight:bold;">${card.playerName}</small>
                         </div>
-                        <div style="font-size:16px; margin:6px 0;"><strong>${item.word || "（なし）"}</strong></div>
+                        <div style="font-size:16px; margin:6px 0;"><strong>${card.word || "（なし）"}</strong></div>
                         <div style="position:relative; width:100%; height:160px; background:#fff; border:1px solid #ccc; border-radius:6px; overflow:hidden;">
                             ${mediaTag}
-                            ${!isVideo ? `<img src="${item.canvasData || ''}" style="position:absolute; top:0; left:0; width:100%; height:100%; pointer-events:none;">` : ''}
+                            ${!isVideo ? `<img src="${card.canvasData || ''}" style="position:absolute; top:0; left:0; width:100%; height:100%; pointer-events:none;">` : ''}
                         </div>
-                        <div style="font-size:22px; font-weight:bold; color:#27ae60; background:var(--accent); padding:4px; border-radius:6px; margin-top:8px;">${item.number}</div>
+                        <div style="font-size:22px; font-weight:bold; color:#27ae60; background:var(--accent); padding:4px; border-radius:6px; margin-top:8px;">${card.number}</div>
                     </div>
                 `;
             });
 
             gameDiv.innerHTML = `
-                <h4 style="color:#006666; margin-top:0;">ゲーム #${gameArchives.length - gIdx} お題: ${archive.theme || "（未設定）"}</h4>
+                <h4 style="color:#006666; margin-top:0;">ゲーム #${state.archives.length - gIdx} お題: ${archive.theme || "（未設定）"}</h4>
                 <div class="archive-field-container">${cardsHtml}</div>
             `;
             container.appendChild(gameDiv);
