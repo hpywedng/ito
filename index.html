@@ -67,7 +67,7 @@
             min-height: 24px !important;
             max-width: 24px !important;
             max-height: 24px !important;
-            flex-shrink: 0 !important; /* 拡大縮小を防ぐ */
+            flex-shrink: 0 !important;
             border-radius: 50%;
             object-fit: cover;
             background: #20b2aa;
@@ -227,7 +227,7 @@
         </div>
     </div>
 
-    <!-- 2. ロビー・準備画面 (ご要望通りの表示順に並び替え) -->
+    <!-- 2. ロビー・準備画面 -->
     <div id="lobby-screen" class="card hidden">
         <h2>ロビー <span style="font-size: 14px; font-weight: normal; color: #555;">(ルームID: <span id="display-room-id" style="font-weight:bold; color:#006666; user-select: all;"></span>)</span></h2>
         <p style="font-size: 13px; color: #c0392b;" id="host-share-notice">※このルームIDをDiscordのメンバーに共有してください。</p>
@@ -248,7 +248,6 @@
             </div>
             <p style="font-size: 13px; color: #555; margin-top:0;">みんなで自由に描き込んで交流しよう！</p>
             
-            <!-- ロビー用お絵描きツールバー -->
             <div class="drawing-toolbar" id="lobby-toolbar">
                 <span class="tool-label">🎨 ペン設定:</span>
                 <div class="tool-group">
@@ -457,7 +456,6 @@
         }
     }
 
-    // YouTubeのURLか判定してiframeタグを返す関数
     function isYoutubeUrl(url) {
         if(!url) return false;
         const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|\&v=)([^#\&\?]*).*/;
@@ -469,7 +467,6 @@
         return `<iframe src="https://www.youtube.com/embed/${videoId}" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen style="width:100%; height:100%; position:absolute; top:0; left:0; border:0; z-index:10;"></iframe>`;
     }
 
-    // カラーイベントの初期化
     document.querySelectorAll('.color-btn').forEach(btn => {
         btn.addEventListener('click', (e) => {
             document.querySelectorAll('.color-btn, .color-picker-btn').forEach(b => b.classList.remove('active'));
@@ -741,6 +738,7 @@
     }
 
     function voteCard(flatIndex, type) {
+        // 並び替え後のフラットなカード配列から、該当カードの所有者名とアイテムインデックスを特定して投票を反映
         let flatCards = [];
         state.allSubmissions.forEach((sub) => {
             sub.items.forEach((item) => { flatCards.push(item); });
@@ -763,7 +761,6 @@
         }
     }
 
-    // アイコン表示の共通関数（CSS崩れ防止策入り）
     function renderAvatarHtml(playerName) {
         const avatarUrl = state.playerAvatars[playerName];
         if(avatarUrl) {
@@ -880,6 +877,7 @@
         const container = document.getElementById("field-container");
         container.innerHTML = "";
 
+        // 提出カードをフラット化して管理（並び順を保持するため subIdx と itemIdx を保持）
         let flatCards = [];
         state.allSubmissions.forEach((sub, sIdx) => {
             sub.items.forEach((item, iIdx) => {
@@ -912,8 +910,6 @@
             }
 
             const avatarHtml = renderAvatarHtml(card.playerName);
-
-            // 動画の場合はお絵描きキャンバスを無効化（pointer-events: none）、画像や白紙の場合はお絵描き可能
             const canvasStyle = isVideo ? "pointer-events: none; display:none;" : "";
 
             cardDiv.innerHTML = `
@@ -951,7 +947,6 @@
         });
     }
 
-    // ── ロビー用大型共有落書きボードの設定 ──
     function setupLobbyCanvas() {
         const canvas = document.getElementById('lobby-draw-canvas');
         if(!canvas) return;
@@ -1029,7 +1024,6 @@
         setupLobbyCanvas();
     }
 
-    // ── お絵描きキャンバス（カード用） ──
     function setupCanvas(canvasId, subIdx, itemIdx, savedDataUrl) {
         const canvas = document.getElementById(canvasId);
         if(!canvas) return;
@@ -1159,9 +1153,20 @@
                 btn.style.background = "#95a5a6";
             } else {
                 if(state.allSubmissions.length > 0) {
+                    // ★修正: アーカイブ保存時に、並び替えられたフラットカードの状態・所有者名を完全に保持した形式で格納
+                    let flatCardsForArchive = [];
+                    state.allSubmissions.forEach(sub => {
+                        sub.items.forEach(item => {
+                            flatCardsForArchive.push({
+                                playerName: sub.name,
+                                ...item
+                            });
+                        });
+                    });
+
                     gameArchives.unshift({
                         theme: state.theme,
-                        submissions: JSON.parse(JSON.stringify(state.allSubmissions))
+                        flatCards: flatCardsForArchive
                     });
                     if(gameArchives.length > 2) {
                         gameArchives.pop();
@@ -1204,37 +1209,36 @@
             gameDiv.style.marginBottom = "15px";
 
             let cardsHtml = "";
-            archive.submissions.forEach(sub => {
-                sub.items.forEach(item => {
-                    const avatarHtml = renderAvatarHtml(sub.name);
-                    const ytId = isYoutubeUrl(item.imgUrl);
-                    let mediaTag = "";
-                    let isVideo = false;
+            // ★修正: 保存されたフラットカード（正しい所有者名が紐づいた状態）からダイレクトに描画
+            archive.flatCards.forEach(item => {
+                const avatarHtml = renderAvatarHtml(item.playerName);
+                const ytId = isYoutubeUrl(item.imgUrl);
+                let mediaTag = "";
+                let isVideo = false;
 
-                    if(ytId) {
-                        mediaTag = getYoutubeIframeHtml(ytId);
-                        isVideo = true;
-                    } else if(item.imgUrl) {
-                        mediaTag = `<img src="${item.imgUrl}" style="width:100%; height:100%; object-fit:cover; position:absolute; top:0; left:0;" onerror="this.style.display='none';">`;
-                    } else {
-                        mediaTag = `<div style="width:100%; height:100%; background:#fff; position:absolute; top:0; left:0;"></div>`;
-                    }
-                    
-                    cardsHtml += `
-                        <div style="background:#fff; border:1px solid var(--primary); border-radius:10px; padding:12px; width:220px; text-align:center;">
-                            <div style="display:flex; align-items:center; gap:6px;">
-                                ${avatarHtml}
-                                <small style="color:#008b8b; font-weight:bold;">${sub.name}</small>
-                            </div>
-                            <div style="font-size:16px; margin:6px 0;"><strong>${item.word || "（なし）"}</strong></div>
-                            <div style="position:relative; width:100%; height:160px; background:#fff; border:1px solid #ccc; border-radius:6px; overflow:hidden;">
-                                ${mediaTag}
-                                ${!isVideo ? `<img src="${item.canvasData || ''}" style="position:absolute; top:0; left:0; width:100%; height:100%; pointer-events:none;">` : ''}
-                            </div>
-                            <div style="font-size:22px; font-weight:bold; color:#27ae60; background:var(--accent); padding:4px; border-radius:6px; margin-top:8px;">${item.number}</div>
+                if(ytId) {
+                    mediaTag = getYoutubeIframeHtml(ytId);
+                    isVideo = true;
+                } else if(item.imgUrl) {
+                    mediaTag = `<img src="${item.imgUrl}" style="width:100%; height:100%; object-fit:cover; position:absolute; top:0; left:0;" onerror="this.style.display='none';">`;
+                } else {
+                    mediaTag = `<div style="width:100%; height:100%; background:#fff; position:absolute; top:0; left:0;"></div>`;
+                }
+                
+                cardsHtml += `
+                    <div style="background:#fff; border:1px solid var(--primary); border-radius:10px; padding:12px; width:220px; text-align:center;">
+                        <div style="display:flex; align-items:center; gap:6px;">
+                            ${avatarHtml}
+                            <small style="color:#008b8b; font-weight:bold;">${item.playerName}</small>
                         </div>
-                    `;
-                });
+                        <div style="font-size:16px; margin:6px 0;"><strong>${item.word || "（なし）"}</strong></div>
+                        <div style="position:relative; width:100%; height:160px; background:#fff; border:1px solid #ccc; border-radius:6px; overflow:hidden;">
+                            ${mediaTag}
+                            ${!isVideo ? `<img src="${item.canvasData || ''}" style="position:absolute; top:0; left:0; width:100%; height:100%; pointer-events:none;">` : ''}
+                        </div>
+                        <div style="font-size:22px; font-weight:bold; color:#27ae60; background:var(--accent); padding:4px; border-radius:6px; margin-top:8px;">${item.number}</div>
+                    </div>
+                `;
             });
 
             gameDiv.innerHTML = `
