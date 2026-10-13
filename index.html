@@ -79,13 +79,14 @@
             box-shadow: 0 4px 12px rgba(0,0,0,0.06);
         }
         
-        /* 画像と落書きキャンバスのコンテナ */
+        /* 画像と落書きキャンバスのコンテナ（初期背景を白に変更） */
         .canvas-container {
             position: relative;
             width: 100%;
             height: 200px;
             border-radius: 8px;
-            background: #e0f8f8;
+            background: #ffffff;
+            border: 1px solid var(--border-color);
             margin-top: 8px;
             overflow: hidden;
             touch-action: none; /* スマホでのスクロール防止 */
@@ -221,8 +222,10 @@
     <!-- 3. メインプレイ画面 -->
     <div id="game-screen" class="card hidden">
         <h2 id="theme-display" style="color: #008b8b;">お題: まだ決まっていません</h2>
+        
+        <!-- 親プレイヤー用のお題入力エリア（文言を変更） -->
         <div id="dealer-input-area" class="hidden" style="background: #e0f8f8; padding: 15px; border-radius: 8px; margin-bottom: 15px; border: 1px solid var(--primary);">
-            <h3>【親権者用】お題入力</h3>
+            <h3 style="color: #006666; margin-top:0;">👑 あなたは親プレイヤーです。お題を入力してください。</h3>
             <input type="text" id="theme-input" placeholder="お題を入力してください（例：コンビニといえば？）" style="width: 70%;">
             <button onclick="setTheme()" style="background: #20b2aa;">お題を決定する</button>
         </div>
@@ -234,8 +237,9 @@
             <span class="tool-label">🎨 ペン設定:</span>
             
             <div class="tool-group" id="color-palette">
-                <button class="color-btn active" style="background: #ffffff;" data-color="#ffffff" title="白"></button>
-                <button class="color-btn" style="background: #000000;" data-color="#000000" title="黒"></button>
+                <!-- 初期選択の黒（または白など使いやすいように黒をデフォルトに） -->
+                <button class="color-btn" style="background: #ffffff;" data-color="#ffffff" title="白"></button>
+                <button class="color-btn active" style="background: #000000;" data-color="#000000" title="黒"></button>
                 <button class="color-btn" style="background: #3498db;" data-color="#3498db" title="青"></button>
                 <button class="color-btn" style="background: #e74c3c;" data-color="#e74c3c" title="赤"></button>
                 <button class="color-btn" style="background: #2ecc71;" data-color="#2ecc71" title="緑"></button>
@@ -266,7 +270,7 @@
         <!-- 3-B. リアルタイム共有テーブル（上部） -->
         <div style="background: #fafdfd; border: 2px solid var(--primary); padding: 15px; border-radius: 10px; margin-bottom: 25px;">
             <h3 style="margin-top: 0; color: #006666;">🃏 場の共有テーブル（みんなの提出カード＆落書き）</h3>
-            <p style="font-size: 13px; color: #555;">カード画像の上に直接マウスやタッチでお絵描きができます！左右の移動やGood/BAD投票も可能です。</p>
+            <p style="font-size: 13px; color: #555;">画像が未入力の場合は白紙になります。直接マウスやタッチでお絵描きしたり、並び替え・Good/BAD投票ができます。</p>
             <div id="field-container"></div>
             
             <div style="margin-top: 20px; border-top: 1px dashed var(--border-color); padding-top: 15px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap;">
@@ -308,8 +312,8 @@
     window.myInputValues = {}; 
     window.myCurrentName = "";
 
-    // ── お絵描きツールの設定状態 ──
-    let currentDrawingColor = "#ffffff";
+    // ── お絵描きツールの設定状態（デフォルトは黒ペン） ──
+    let currentDrawingColor = "#000000";
     let currentBrushSize = 5;
     let currentToolMode = "pen"; // 'pen' or 'eraser'
 
@@ -516,7 +520,7 @@
             const imgUrlInput = document.getElementById(`img-url-${index}`);
             
             const word = wordInput ? wordInput.value.trim() : (window.myInputValues[index]?.word || "");
-            const imgUrl = imgUrlInput ? imgUrlInput.value.trim() : (window.myInputValues[index]?.imgUrl || "https://picsum.photos/200/200");
+            const imgUrl = imgUrlInput ? imgUrlInput.value.trim() : (window.myInputValues[index]?.imgUrl || "");
             
             let existingItem = null;
             const oldSub = state.allSubmissions.find(s => s.name === window.myCurrentName);
@@ -527,11 +531,11 @@
             items.push({ 
                 number: num, 
                 word: word, 
-                imgUrl: imgUrl || "https://picsum.photos/200/200", 
+                imgUrl: imgUrl, // 空白なら空文字のまま（白紙になる）
                 revealed: state.isRevealed,
                 good: existingItem ? (existingItem.good || 0) : 0,
                 bad: existingItem ? (existingItem.bad || 0) : 0,
-                canvasData: existingItem ? (existingItem.canvasData || "") : "" // 落書きデータを保持
+                canvasData: existingItem ? (existingItem.canvasData || "") : ""
             });
         });
 
@@ -585,7 +589,7 @@
                 const badge = document.createElement("span");
                 badge.className = "player-badge";
                 let removeHtml = (isHost && p !== window.myCurrentName) ? `<span class="remove-btn" onclick="removePlayer('${p}')" title="このプレイヤーを削除">✕</span>` : '';
-                badge.innerHTML = `${p} ${removeHtml}`;
+                badge.innerHTML = `${p}${removeHtml}`;
                 listContainer.appendChild(badge);
             });
         } else if(state.phase === "play") {
@@ -610,7 +614,7 @@
 
             const submittedCount = state.allSubmissions.length;
             const totalPlayers = state.players.length;
-            document.getElementById("submission-status-text").innerText = `提出状況: ${submittedCount} / ${totalPlayers} 人完了`;
+            document.getElementById("submission-status-text").innerText = `提出状況: ${submittedCount} /${totalPlayers} 人完了`;
 
             renderField();
         }
@@ -635,9 +639,9 @@
             div.innerHTML = `
                 <p><strong>数字カード #${index+1}</strong>: <span style="color:#27ae60; font-size:22px; font-weight:bold;">${num}</span></p>
                 <label>答えのワード: <input type="text" id="word-${index}" value="${currentData.word}" placeholder="例：コンビニのコーヒー" oninput="updateInputVal(${index}, 'word', this.value)"></label><br>
-                <label>画像URL: <input type="text" id="img-url-${index}" value="${currentData.imgUrl}" placeholder="https://example.com/image.jpg" style="width: 60%;" oninput="updateInputVal(${index}, 'img-url', this.value); previewImage(${index})"></label>
+                <label>画像URL (空欄なら白紙): <input type="text" id="img-url-${index}" value="${currentData.imgUrl}" placeholder="https://example.com/image.jpg (空欄OK)" style="width: 55%;" oninput="updateInputVal(${index}, 'img-url', this.value); previewImage(${index})"></label>
                 <div id="img-preview-${index}" style="margin-top:10px;">
-                    ${currentData.imgUrl ? `<img src="${currentData.imgUrl}" style="width:140px; height:140px; object-fit:cover; border-radius:8px;" onerror="this.style.display='none';">` : ''}
+                    ${currentData.imgUrl ? `<img src="${currentData.imgUrl}" style="width:140px; height:140px; object-fit:cover; border-radius:8px;" onerror="this.style.display='none';">` : '<div style="width:140px; height:140px; background:#fff; border:1px solid #ccc; border-radius:8px; display:flex; align-items:center; justify-content:center; color:#888; font-size:12px;">(白紙カード)</div>'}
                 </div>
             `;
             container.appendChild(div);
@@ -648,9 +652,9 @@
         const url = document.getElementById(`img-url-${index}`).value.trim();
         const preview = document.getElementById(`img-preview-${index}`);
         if(url) {
-            preview.innerHTML = `<img src="${url}" style="width:140px; height:140px; object-fit:cover; border-radius:8px;" onerror="this.onerror=null; this.src='https://picsum.photos/200/200';">`;
+            preview.innerHTML = `<img src="${url}" style="width:140px; height:140px; object-fit:cover; border-radius:8px;" onerror="this.onerror=null; this.innerHTML='<div style=\\\'width:140px; height:140px; background:#fff; border:1px solid #ccc; border-radius:8px; display:flex; align-items:center; justify-content:center; color:#c0392b; font-size:11px;\\\'>画像読み込みエラー</div>';">`;
         } else {
-            preview.innerHTML = "";
+            preview.innerHTML = `<div style="width:140px; height:140px; background:#fff; border:1px solid #ccc; border-radius:8px; display:flex; align-items:center; justify-content:center; color:#888; font-size:12px;">(白紙カード)</div>`;
         }
     }
 
@@ -678,6 +682,9 @@
                 `<div class="number-badge" onclick="toggleReveal(${card.subIdx}, ${card.itemIdx})">${card.number}</div>` : 
                 `<div class="hidden-num">？（非公開）</div>`;
 
+            // 画像URLがある場合のみimgタグを表示、なければ白紙のコンテナになる
+            let imgTag = card.imgUrl ? `<img src="${card.imgUrl}" onerror="this.style.display='none';">` : ``;
+
             cardDiv.innerHTML = `
                 <div style="display:flex; justify-content:space-between; align-items:center;">
                     <small style="color:#008b8b; font-weight:bold; font-size:14px;">${card.playerName}</small>
@@ -687,7 +694,7 @@
                 
                 <!-- 画像 ＋ 落書き用キャンバスのオーバーレイコンテナ -->
                 <div class="canvas-container">
-                    <img src="${card.imgUrl}" onerror="this.src='https://picsum.photos/200/200';">
+                    ${imgTag}
                     <canvas class="draw-canvas" id="canvas-${card.subIdx}-${card.itemIdx}"></canvas>
                 </div>
 
@@ -716,7 +723,6 @@
         if(!canvas) return;
         const ctx = canvas.getContext('2d');
 
-        // キャンバスの実際の解像度をコンテナサイズに合わせる
         canvas.width = canvas.offsetWidth;
         canvas.height = canvas.offsetHeight;
 
@@ -751,7 +757,7 @@
             if(currentToolMode === 'eraser') {
                 ctx.strokeStyle = '#ffffff'; // 消しゴム（白で上描き）
                 ctx.lineWidth = currentBrushSize * 2;
-                ctx.globalCompositeOperation = 'destination-out'; // 綺麗に透明に消す
+                ctx.globalCompositeOperation = 'destination-out';
             } else {
                 ctx.strokeStyle = currentDrawingColor;
                 ctx.lineWidth = currentBrushSize;
@@ -769,7 +775,6 @@
             isDrawing = false;
             ctx.closePath();
 
-            // 描画結果をDataURLに変換してStateに保存し同期
             const dataUrl = canvas.toDataURL();
             const sub = state.allSubmissions[subIdx];
             if(sub && sub.items[itemIdx]) {
@@ -778,19 +783,16 @@
             }
         }
 
-        // マウスイベント
         canvas.onmousedown = startDrawing;
         canvas.onmousemove = draw;
         canvas.onmouseup = stopDrawing;
         canvas.onmouseleave = stopDrawing;
 
-        // タッチイベント（スマホ・タブレット対応）
         canvas.ontouchstart = startDrawing;
         canvas.ontouchmove = draw;
         canvas.ontouchend = stopDrawing;
     }
 
-    // 個別の落書きクリアボタン
     function clearCardCanvas(subIdx, itemIdx) {
         const sub = state.allSubmissions[subIdx];
         if(sub && sub.items[itemIdx]) {
@@ -809,7 +811,6 @@
         const targetIdx = flatIndex + direction;
         if(targetIdx < 0 || targetIdx >= flatCards.length) return;
 
-        // 位置変更時はGood/BADカウンターをリセット
         flatCards.forEach(card => {
             card.good = 0;
             card.bad = 0;
