@@ -73,23 +73,81 @@
             border: 2px solid var(--primary); 
             border-radius: 12px; 
             padding: 15px; 
-            width: 240px; 
+            width: 260px; 
             text-align: center; 
             position: relative; 
             box-shadow: 0 4px 12px rgba(0,0,0,0.06);
         }
-        .field-card img { width: 100%; height: 200px; object-fit: cover; border-radius: 8px; background: #e0f8f8; margin-top: 8px; }
+        
+        /* 画像と落書きキャンバスのコンテナ */
+        .canvas-container {
+            position: relative;
+            width: 100%;
+            height: 200px;
+            border-radius: 8px;
+            background: #e0f8f8;
+            margin-top: 8px;
+            overflow: hidden;
+            touch-action: none; /* スマホでのスクロール防止 */
+        }
+        .field-card img { 
+            width: 100%; 
+            height: 100%; 
+            object-fit: cover; 
+            position: absolute; 
+            top: 0; 
+            left: 0; 
+            pointer-events: none; 
+        }
+        .draw-canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            cursor: crosshair;
+        }
+
         .number-badge { font-size: 26px; font-weight: bold; color: #27ae60; background: var(--accent); padding: 6px 12px; border-radius: 8px; display: inline-block; margin-top: 8px; cursor: pointer; border: 1px solid var(--accent-border); }
         .hidden-num { font-size: 18px; font-weight: bold; color: #7f8c8d; background: #ecf0f1; padding: 6px 12px; border-radius: 8px; display: inline-block; margin-top: 8px; }
         
         /* 操作・投票ボタンエリア */
         .move-btns { margin-top: 10px; display: flex; justify-content: space-between; }
-        .move-btns button { padding: 6px 12px; font-size: 14px; background: #7f8c8d; }
+        .move-btns button { padding: 6px 10px; font-size: 13px; background: #7f8c8d; }
         .move-btns button:hover { background: #595f61; }
         
+        .card-action-row { margin-top: 6px; display: flex; justify-content: space-between; align-items: center; }
+        .clear-canvas-btn { background: #e74c3c; font-size: 12px; padding: 4px 8px; margin: 0; }
+        .clear-canvas-btn:hover { background: #c0392b; }
+
         .vote-area { margin-top: 8px; display: flex; justify-content: space-around; background: #f0f8f8; padding: 6px; border-radius: 6px; border: 1px solid var(--border-color); }
-        .vote-btn { background: #fff; border: 1px solid var(--border-color); padding: 4px 10px; border-radius: 4px; font-size: 14px; cursor: pointer; color: #2c3e50; display: flex; align-items: center; gap: 4px; }
+        .vote-btn { background: #fff; border: 1px solid var(--border-color); padding: 4px 8px; border-radius: 4px; font-size: 13px; cursor: pointer; color: #2c3e50; display: flex; align-items: center; gap: 4px; margin: 0; }
         .vote-btn:hover { background: #e0f8f8; }
+
+        /* お絵描きツールバーのデザイン */
+        .drawing-toolbar {
+            background: #ffffff;
+            border: 2px solid var(--primary);
+            padding: 12px 15px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            display: flex;
+            gap: 15px;
+            align-items: center;
+            flex-wrap: wrap;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+        }
+        .tool-group { display: flex; gap: 6px; align-items: center; }
+        .tool-label { font-size: 13px; font-weight: bold; color: #555; }
+        
+        .color-btn { width: 28px; height: 28px; border-radius: 50%; border: 2px solid #ccc; cursor: pointer; padding: 0; margin: 0; transition: transform 0.1s; }
+        .color-btn.active { transform: scale(1.2); border-color: #2c3e50; box-shadow: 0 0 5px rgba(0,0,0,0.3); }
+        
+        .size-btn { padding: 4px 10px; font-size: 13px; background: #fff; color: #2c3e50; border: 1px solid var(--border-color); border-radius: 4px; cursor: pointer; }
+        .size-btn.active { background: #5cacac; color: #fff; border-color: #458b8b; }
+
+        .mode-btn { padding: 6px 12px; font-size: 13px; background: #fff; color: #2c3e50; border: 1px solid var(--border-color); border-radius: 6px; cursor: pointer; font-weight: bold; }
+        .mode-btn.active { background: #20b2aa; color: #fff; border-color: #008b8b; }
 
         .sync-bar { background: var(--primary); padding: 10px 15px; border-radius: 8px; margin-bottom: 15px; display: flex; justify-content: space-between; align-items: center; color: #1a252f; font-weight: bold; border: 1px solid #85e3e3; }
         .status-msg { font-size: 14px; color: #006666; margin-left: 10px; font-weight: bold; }
@@ -160,7 +218,7 @@
         </div>
     </div>
 
-    <!-- 3. メインプレイ画面（中央テーブル ＆ 下部入力フォームが同居） -->
+    <!-- 3. メインプレイ画面 -->
     <div id="game-screen" class="card hidden">
         <h2 id="theme-display" style="color: #008b8b;">お題: まだ決まっていません</h2>
         <div id="dealer-input-area" class="hidden" style="background: #e0f8f8; padding: 15px; border-radius: 8px; margin-bottom: 15px; border: 1px solid var(--primary);">
@@ -171,10 +229,44 @@
 
         <hr style="border:0; border-top:1px solid #d1e7e7; margin: 20px 0;">
 
-        <!-- 3-A. リアルタイム共有テーブル（上部） -->
+        <!-- 3-A. お絵描きツールバー（カードとお題の間に配置） -->
+        <div class="drawing-toolbar">
+            <span class="tool-label">🎨 ペン設定:</span>
+            
+            <div class="tool-group" id="color-palette">
+                <button class="color-btn active" style="background: #ffffff;" data-color="#ffffff" title="白"></button>
+                <button class="color-btn" style="background: #000000;" data-color="#000000" title="黒"></button>
+                <button class="color-btn" style="background: #3498db;" data-color="#3498db" title="青"></button>
+                <button class="color-btn" style="background: #e74c3c;" data-color="#e74c3c" title="赤"></button>
+                <button class="color-btn" style="background: #2ecc71;" data-color="#2ecc71" title="緑"></button>
+                <button class="color-btn" style="background: #f1c40f;" data-color="#f1c40f" title="黄色"></button>
+                <button class="color-btn" style="background: #00bcd4;" data-color="#00bcd4" title="水色"></button>
+                <button class="color-btn" style="background: #9b59b6;" data-color="#9b59b6" title="紫"></button>
+                <button class="color-btn" style="background: #ff69b4;" data-color="#ff69b4" title="ピンク"></button>
+            </div>
+
+            <div style="width: 1px; height: 25px; background: var(--border-color); margin: 0 5px;"></div>
+
+            <div class="tool-group">
+                <button class="mode-btn active" id="mode-pen-btn" onclick="setDrawingMode('pen')">✏️ ペン</button>
+                <button class="mode-btn" id="mode-eraser-btn" onclick="setDrawingMode('eraser')">🧹 消しゴム</button>
+            </div>
+
+            <div style="width: 1px; height: 25px; background: var(--border-color); margin: 0 5px;"></div>
+
+            <div class="tool-group" id="size-selector">
+                <span class="tool-label">太さ:</span>
+                <button class="size-btn" data-size="2" onclick="setBrushSize(2)">細</button>
+                <button class="size-btn active" data-size="5" onclick="setBrushSize(5)">中</button>
+                <button class="size-btn" data-size="10" onclick="setBrushSize(10)">太</button>
+                <button class="size-btn" data-size="20" onclick="setBrushSize(20)">極太</button>
+            </div>
+        </div>
+
+        <!-- 3-B. リアルタイム共有テーブル（上部） -->
         <div style="background: #fafdfd; border: 2px solid var(--primary); padding: 15px; border-radius: 10px; margin-bottom: 25px;">
-            <h3 style="margin-top: 0; color: #006666;">🃏 場の共有テーブル（みんなの提出カード）</h3>
-            <p style="font-size: 13px; color: #555;">提出されたカードがここにリアルタイムで並びます。並び順の変更や、Good/BADの意思表示ができます。</p>
+            <h3 style="margin-top: 0; color: #006666;">🃏 場の共有テーブル（みんなの提出カード＆落書き）</h3>
+            <p style="font-size: 13px; color: #555;">カード画像の上に直接マウスやタッチでお絵描きができます！左右の移動やGood/BAD投票も可能です。</p>
             <div id="field-container"></div>
             
             <div style="margin-top: 20px; border-top: 1px dashed var(--border-color); padding-top: 15px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap;">
@@ -183,7 +275,7 @@
             </div>
         </div>
 
-        <!-- 3-B. 自分の手札入力・提出エリア（下部） -->
+        <!-- 3-C. 自分の手札入力・提出エリア（下部） -->
         <div style="background: #ffffff; border: 1px solid var(--border-color); padding: 15px; border-radius: 10px;">
             <div id="input-form-area">
                 <h3 style="margin-top: 0;">✍️ あなたの手札・解答入力</h3>
@@ -216,25 +308,57 @@
     window.myInputValues = {}; 
     window.myCurrentName = "";
 
-    // PeerJSの初期化
-    function initPeer(customId, callback) {
-        peer = new Peer(customId, {
-            debug: 1
-        });
+    // ── お絵描きツールの設定状態 ──
+    let currentDrawingColor = "#ffffff";
+    let currentBrushSize = 5;
+    let currentToolMode = "pen"; // 'pen' or 'eraser'
 
+    // カラーボタン選択イベント
+    document.querySelectorAll('.color-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            document.querySelectorAll('.color-btn').forEach(b => b.classList.remove('active'));
+            e.target.classList.add('active');
+            currentDrawingColor = e.target.getAttribute('data-color');
+            setDrawingMode('pen');
+        });
+    });
+
+    function setDrawingMode(mode) {
+        currentToolMode = mode;
+        if(mode === 'pen') {
+            document.getElementById('mode-pen-btn').classList.add('active');
+            document.getElementById('mode-eraser-btn').classList.remove('active');
+        } else {
+            document.getElementById('mode-eraser-btn').classList.add('active');
+            document.getElementById('mode-pen-btn').classList.remove('active');
+        }
+    }
+
+    function setBrushSize(size) {
+        currentBrushSize = size;
+        document.querySelectorAll('.size-btn').forEach(b => {
+            if(parseInt(b.getAttribute('data-size')) === size) {
+                b.classList.add('active');
+            } else {
+                b.classList.remove('active');
+            }
+        });
+    }
+
+    // PeerJS初期化
+    function initPeer(customId, callback) {
+        peer = new Peer(customId, { debug: 1 });
         peer.on('open', (id) => {
             myRoomId = id;
             document.getElementById("sync-status").innerText = "● 接続待機OK";
             if(callback) callback();
         });
-
         peer.on('connection', (incomingConn) => {
             if(isHost) {
                 hostConnections.push(incomingConn);
                 setupHostConnection(incomingConn);
             }
         });
-
         peer.on('error', (err) => {
             console.error(err);
             if(err.type === 'unavailable-id') {
@@ -245,37 +369,24 @@
         });
     }
 
-    // ホスト側：ゲストからの接続設定
     function setupHostConnection(c) {
-        c.on('data', (data) => {
-            handleIncomingData(data, c);
-        });
-        c.on('close', () => {
-            hostConnections = hostConnections.filter(item => item !== c);
-        });
+        c.on('data', (data) => { handleIncomingData(data, c); });
+        c.on('close', () => { hostConnections = hostConnections.filter(item => item !== c); });
     }
 
-    // ゲスト側：ホストとの接続設定
     function setupGuestConnection(c) {
         c.on('open', () => {
             document.getElementById("sync-status").innerText = "● ホストと接続完了";
             c.send({ type: "JOIN", name: window.myCurrentName });
         });
-        c.on('data', (data) => {
-            handleIncomingData(data, null);
-        });
-        c.on('close', () => {
-            alert("ホストとの接続が切断されました。");
-        });
+        c.on('data', (data) => { handleIncomingData(data, null); });
+        c.on('close', () => { alert("ホストとの接続が切断されました。"); });
     }
 
-    // データ受信時の処理
     function handleIncomingData(data, senderConn) {
         if(isHost) {
             if(data.type === "JOIN") {
-                if(!state.players.includes(data.name)) {
-                    state.players.push(data.name);
-                }
+                if(!state.players.includes(data.name)) { state.players.push(data.name); }
                 broadcastState();
             } else if(data.type === "UPDATE_STATE") {
                 state = data.state;
@@ -289,28 +400,21 @@
         }
     }
 
-    // ホストから全ゲストへ最新状態をブロードキャスト送信
     function broadcastState() {
         renderCurrentScreen();
         hostConnections.forEach(c => {
-            if(c.open) {
-                c.send({ type: "STATE_SYNC", state: state });
-            }
+            if(c.open) { c.send({ type: "STATE_SYNC", state: state }); }
         });
     }
 
-    // 状態変更時の同期
     function syncAndPush() {
         if(isHost) {
             broadcastState();
         } else {
-            if(conn && conn.open) {
-                conn.send({ type: "UPDATE_STATE", state: state });
-            }
+            if(conn && conn.open) { conn.send({ type: "UPDATE_STATE", state: state }); }
         }
     }
 
-    // ルームを作成する（ホスト）
     function createRoom() {
         const nameInput = document.getElementById("player-name-input").value.trim();
         const rInput = document.getElementById("create-room-id-input").value.trim();
@@ -322,14 +426,12 @@
         document.getElementById("connection-mode-label").innerText = "ホスト（部屋の主）";
 
         const fullRoomId = "discord-ito-" + rInput;
-
         initPeer(fullRoomId, () => {
             state.players.push(window.myCurrentName);
             renderCurrentScreen();
         });
     }
 
-    // ルームに参加する（ゲスト）
     function joinRoom() {
         const nameInput = document.getElementById("player-name-input").value.trim();
         const rInput = document.getElementById("join-room-id-input").value.trim();
@@ -344,16 +446,13 @@
         document.getElementById("guest-waiting-notice").classList.remove("hidden");
 
         const fullRoomId = "discord-ito-" + rInput;
-
         initPeer(undefined, () => {
             conn = peer.connect(fullRoomId);
             setupGuestConnection(conn);
         });
     }
 
-    function leaveGame() {
-        location.reload();
-    }
+    function leaveGame() { location.reload(); }
 
     function removePlayer(name) {
         if(!isHost) return;
@@ -419,7 +518,6 @@
             const word = wordInput ? wordInput.value.trim() : (window.myInputValues[index]?.word || "");
             const imgUrl = imgUrlInput ? imgUrlInput.value.trim() : (window.myInputValues[index]?.imgUrl || "https://picsum.photos/200/200");
             
-            // 既存の投票数を引き継ぐ（再提出時）
             let existingItem = null;
             const oldSub = state.allSubmissions.find(s => s.name === window.myCurrentName);
             if(oldSub && oldSub.items[index]) {
@@ -432,7 +530,8 @@
                 imgUrl: imgUrl || "https://picsum.photos/200/200", 
                 revealed: state.isRevealed,
                 good: existingItem ? (existingItem.good || 0) : 0,
-                bad: existingItem ? (existingItem.bad || 0) : 0
+                bad: existingItem ? (existingItem.bad || 0) : 0,
+                canvasData: existingItem ? (existingItem.canvasData || "") : "" // 落書きデータを保持
             });
         });
 
@@ -447,13 +546,10 @@
         renderCurrentScreen();
     }
 
-    // Good / BAD 投票用関数
     function voteCard(flatIndex, type) {
         let flatCards = [];
         state.allSubmissions.forEach((sub) => {
-            sub.items.forEach((item) => {
-                flatCards.push(item);
-            });
+            sub.items.forEach((item) => { flatCards.push(item); });
         });
 
         if(flatCards[flatIndex]) {
@@ -463,12 +559,9 @@
                 flatCards[flatIndex].bad = (flatCards[flatIndex].bad || 0) + 1;
             }
 
-            // state側に反映
             let cursor = 0;
             state.allSubmissions.forEach(sub => {
-                for(let i=0; i<sub.items.length; i++) {
-                    sub.items[i] = flatCards[cursor++];
-                }
+                for(let i=0; i<sub.items.length; i++) { sub.items[i] = flatCards[cursor++]; }
             });
 
             syncAndPush();
@@ -586,9 +679,18 @@
                 `<div class="hidden-num">？（非公開）</div>`;
 
             cardDiv.innerHTML = `
-                <small style="color:#008b8b; font-weight:bold; font-size:14px;">${card.playerName}</small>
-                <div style="font-size:18px; margin: 8px 0;"><strong>${card.word || "（ワードなし）"}</strong></div>
-                <img src="${card.imgUrl}" onerror="this.src='https://picsum.photos/200/200';">
+                <div style="display:flex; justify-content:space-between; align-items:center;">
+                    <small style="color:#008b8b; font-weight:bold; font-size:14px;">${card.playerName}</small>
+                    <button class="clear-canvas-btn" onclick="clearCardCanvas(${card.subIdx}, ${card.itemIdx})">🧹 落書きクリア</button>
+                </div>
+                <div style="font-size:18px; margin: 6px 0;"><strong>${card.word || "（ワードなし）"}</strong></div>
+                
+                <!-- 画像 ＋ 落書き用キャンバスのオーバーレイコンテナ -->
+                <div class="canvas-container">
+                    <img src="${card.imgUrl}" onerror="this.src='https://picsum.photos/200/200';">
+                    <canvas class="draw-canvas" id="canvas-${card.subIdx}-${card.itemIdx}"></canvas>
+                </div>
+
                 <div>${numDisplay}</div>
                 
                 <div class="move-btns">
@@ -602,21 +704,112 @@
                 </div>
             `;
             container.appendChild(cardDiv);
+
+            // キャンバスの初期化＆イベントリスナー設定
+            setupCanvas(`canvas-${card.subIdx}-${card.itemIdx}`, card.subIdx, card.itemIdx, card.canvasData);
         });
+    }
+
+    // 各カードのキャンバス初期化と描画イベント処理
+    function setupCanvas(canvasId, subIdx, itemIdx, savedDataUrl) {
+        const canvas = document.getElementById(canvasId);
+        if(!canvas) return;
+        const ctx = canvas.getContext('2d');
+
+        // キャンバスの実際の解像度をコンテナサイズに合わせる
+        canvas.width = canvas.offsetWidth;
+        canvas.height = canvas.offsetHeight;
+
+        // 保存された落書きデータがあれば復元描画
+        if(savedDataUrl) {
+            const img = new Image();
+            img.onload = () => {
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                ctx.drawImage(img, 0, 0);
+            };
+            img.src = savedDataUrl;
+        }
+
+        let isDrawing = false;
+
+        function startDrawing(e) {
+            isDrawing = true;
+            const rect = canvas.getBoundingClientRect();
+            const x = (e.clientX || e.touches[0].clientX) - rect.left;
+            const y = (e.clientY || e.touches[0].clientY) - rect.top;
+            ctx.beginPath();
+            ctx.moveTo(x, y);
+        }
+
+        function draw(e) {
+            if(!isDrawing) return;
+            e.preventDefault();
+            const rect = canvas.getBoundingClientRect();
+            const x = (e.clientX || e.touches[0].clientX) - rect.left;
+            const y = (e.clientY || e.touches[0].clientY) - rect.top;
+
+            if(currentToolMode === 'eraser') {
+                ctx.strokeStyle = '#ffffff'; // 消しゴム（白で上描き）
+                ctx.lineWidth = currentBrushSize * 2;
+                ctx.globalCompositeOperation = 'destination-out'; // 綺麗に透明に消す
+            } else {
+                ctx.strokeStyle = currentDrawingColor;
+                ctx.lineWidth = currentBrushSize;
+                ctx.globalCompositeOperation = 'source-over';
+            }
+            ctx.lineCap = 'round';
+            ctx.lineJoin = 'round';
+
+            ctx.lineTo(x, y);
+            ctx.stroke();
+        }
+
+        function stopDrawing() {
+            if(!isDrawing) return;
+            isDrawing = false;
+            ctx.closePath();
+
+            // 描画結果をDataURLに変換してStateに保存し同期
+            const dataUrl = canvas.toDataURL();
+            const sub = state.allSubmissions[subIdx];
+            if(sub && sub.items[itemIdx]) {
+                sub.items[itemIdx].canvasData = dataUrl;
+                syncAndPush();
+            }
+        }
+
+        // マウスイベント
+        canvas.onmousedown = startDrawing;
+        canvas.onmousemove = draw;
+        canvas.onmouseup = stopDrawing;
+        canvas.onmouseleave = stopDrawing;
+
+        // タッチイベント（スマホ・タブレット対応）
+        canvas.ontouchstart = startDrawing;
+        canvas.ontouchmove = draw;
+        canvas.ontouchend = stopDrawing;
+    }
+
+    // 個別の落書きクリアボタン
+    function clearCardCanvas(subIdx, itemIdx) {
+        const sub = state.allSubmissions[subIdx];
+        if(sub && sub.items[itemIdx]) {
+            sub.items[itemIdx].canvasData = "";
+            syncAndPush();
+            renderField();
+        }
     }
 
     function moveCardItem(flatIndex, direction) {
         let flatCards = [];
         state.allSubmissions.forEach((sub) => {
-            sub.items.forEach((item) => {
-                flatCards.push(item);
-            });
+            sub.items.forEach((item) => { flatCards.push(item); });
         });
 
         const targetIdx = flatIndex + direction;
         if(targetIdx < 0 || targetIdx >= flatCards.length) return;
 
-        // 位置が変更されたため、すべてのカードの Good / BAD カウントを 0 にリセット
+        // 位置変更時はGood/BADカウンターをリセット
         flatCards.forEach(card => {
             card.good = 0;
             card.bad = 0;
@@ -628,9 +821,7 @@
 
         let cursor = 0;
         state.allSubmissions.forEach(sub => {
-            for(let i=0; i<sub.items.length; i++) {
-                sub.items[i] = flatCards[cursor++];
-            }
+            for(let i=0; i<sub.items.length; i++) { sub.items[i] = flatCards[cursor++]; }
         });
 
         syncAndPush();
@@ -649,9 +840,7 @@
             if(!state.isRevealed) {
                 state.isRevealed = true;
                 state.allSubmissions.forEach(sub => {
-                    sub.items.forEach(item => {
-                        item.revealed = true;
-                    });
+                    sub.items.forEach(item => { item.revealed = true; });
                 });
                 btn.innerText = "ゲームをリセットしてロビーに戻る";
                 btn.style.background = "#95a5a6";
