@@ -89,7 +89,7 @@
             border: 1px solid var(--border-color);
             margin-top: 8px;
             overflow: hidden;
-            touch-action: none; /* スマホやペンタブでのスクロール・ジェスチャー防止 */
+            touch-action: none;
         }
         .field-card img { 
             width: 100%; 
@@ -145,6 +145,20 @@
         .color-btn { width: 28px; height: 28px; border-radius: 50%; border: 2px solid #ccc; cursor: pointer; padding: 0; margin: 0; transition: transform 0.1s; }
         .color-btn.active { transform: scale(1.2); border-color: #2c3e50; box-shadow: 0 0 5px rgba(0,0,0,0.3); }
         
+        /* カスタムカラーピッカー（カラーサークル）のアイコンボタン */
+        .color-picker-btn {
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            border: 2px solid #ccc;
+            cursor: pointer;
+            background: conic-gradient(red, yellow, lime, cyan, blue, magenta, red);
+            padding: 0;
+            margin: 0;
+            transition: transform 0.1s;
+        }
+        .color-picker-btn.active { transform: scale(1.2); border-color: #2c3e50; box-shadow: 0 0 5px rgba(0,0,0,0.3); }
+
         .size-btn { padding: 4px 10px; font-size: 13px; background: #fff; color: #2c3e50; border: 1px solid var(--border-color); border-radius: 4px; cursor: pointer; }
         .size-btn.active { background: #5cacac; color: #fff; border-color: #458b8b; }
 
@@ -247,6 +261,9 @@
                 <button class="color-btn" style="background: #00bcd4;" data-color="#00bcd4" title="水色"></button>
                 <button class="color-btn" style="background: #9b59b6;" data-color="#9b59b6" title="紫"></button>
                 <button class="color-btn" style="background: #ff69b4;" data-color="#ff69b4" title="ピンク"></button>
+                <!-- カラーサークル（カラーピッカーを開くボタン） -->
+                <button class="color-picker-btn" id="custom-color-trigger" title="カラーサークルから選ぶ"></button>
+                <input type="color" id="native-color-picker" value="#000000" style="display:none;" onchange="selectCustomColor(this.value)">
             </div>
 
             <div style="width: 1px; height: 25px; background: var(--border-color); margin: 0 5px;"></div>
@@ -265,12 +282,19 @@
                 <button class="size-btn" data-size="10" onclick="setBrushSize(10)">太</button>
                 <button class="size-btn" data-size="20" onclick="setBrushSize(20)">極太</button>
             </div>
+
+            <div style="width: 1px; height: 25px; background: var(--border-color); margin: 0 5px;"></div>
+
+            <!-- 筆圧オン/オフ切り替えボタン -->
+            <div class="tool-group">
+                <button class="mode-btn" id="pressure-toggle-btn" onclick="togglePressure()">筆圧: OFF</button>
+            </div>
         </div>
 
         <!-- 3-B. リアルタイム共有テーブル（上部） -->
         <div style="background: #fafdfd; border: 2px solid var(--primary); padding: 15px; border-radius: 10px; margin-bottom: 25px;">
             <h3 style="margin-top: 0; color: #006666;">🃏 場の共有テーブル（みんなの提出カード＆落書き）</h3>
-            <p style="font-size: 13px; color: #555;">ペンタブやマウスでお絵描きができます。並び替えやGood/BAD投票も可能です。</p>
+            <p style="font-size: 13px; color: #555;">ペンタブの筆圧対応やカラーサークルでの自由な色選択が可能です。並び替えやGood/BAD投票もできます。</p>
             <div id="field-container"></div>
             
             <div style="margin-top: 20px; border-top: 1px dashed var(--border-color); padding-top: 15px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap;">
@@ -316,15 +340,31 @@
     let currentDrawingColor = "#000000";
     let currentBrushSize = 5;
     let currentToolMode = "pen"; // 'pen' or 'eraser'
+    let usePressure = false;     // 筆圧感知の有効/無効
 
+    // カラーパレットボタンのイベント
     document.querySelectorAll('.color-btn').forEach(btn => {
         btn.addEventListener('click', (e) => {
-            document.querySelectorAll('.color-btn').forEach(b => b.classList.remove('active'));
+            document.querySelectorAll('.color-btn, .color-picker-btn').forEach(b => b.classList.remove('active'));
             e.target.classList.add('active');
             currentDrawingColor = e.target.getAttribute('data-color');
             setDrawingMode('pen');
         });
     });
+
+    // カラーサークル（ピッカー）起動トリガー
+    document.getElementById('custom-color-trigger').addEventListener('click', () => {
+        document.getElementById('native-color-picker').click();
+    });
+
+    function selectCustomColor(hexColor) {
+        currentDrawingColor = hexColor;
+        document.querySelectorAll('.color-btn').forEach(b => b.classList.remove('active'));
+        const pickerBtn = document.getElementById('custom-color-trigger');
+        pickerBtn.classList.add('active');
+        // カラーサークルアイコンの背景を、選んだ色に少し合わせるかグラデーションのままにする
+        setDrawingMode('pen');
+    }
 
     function setDrawingMode(mode) {
         currentToolMode = mode;
@@ -346,6 +386,20 @@
                 b.classList.remove('active');
             }
         });
+    }
+
+    function togglePressure() {
+        usePressure = !usePressure;
+        const btn = document.getElementById('pressure-toggle-btn');
+        if(usePressure) {
+            btn.innerText = "筆圧: ON";
+            btn.style.background = "#20b2aa";
+            btn.style.color = "#fff";
+        } else {
+            btn.innerText = "筆圧: OFF";
+            btn.style.background = "#fff";
+            btn.style.color = "#2c3e50";
+        }
     }
 
     function initPeer(customId, callback) {
@@ -712,7 +766,7 @@
         });
     }
 
-    // ── ポインターイベント（マウス・タッチ・ペンタブ対応）を用いた描画処理 ──
+    // ── ポインターイベント（筆圧感知対応）を用いた描画処理 ──
     function setupCanvas(canvasId, subIdx, itemIdx, savedDataUrl) {
         const canvas = document.getElementById(canvasId);
         if(!canvas) return;
@@ -754,8 +808,15 @@
                 ctx.globalCompositeOperation = 'destination-out';
             } else {
                 ctx.strokeStyle = currentDrawingColor;
-                ctx.lineWidth = currentBrushSize;
                 ctx.globalCompositeOperation = 'source-over';
+
+                // 筆圧（pressure）が取得できる場合（ペンタブなど）かつ筆圧ONの場合
+                if(usePressure && e.pressure !== undefined && e.pressure > 0) {
+                    // 筆圧に応じて太さを変動（最小0.5倍 〜 最大2.5倍）
+                    ctx.lineWidth = currentBrushSize * (e.pressure * 2);
+                } else {
+                    ctx.lineWidth = currentBrushSize;
+                }
             }
             ctx.lineCap = 'round';
             ctx.lineJoin = 'round';
@@ -777,7 +838,6 @@
             }
         }
 
-        // Pointer Events を使用（マウス・タッチ・ペンタブすべての入力を網羅）
         canvas.onpointerdown = startDrawing;
         canvas.onpointermove = draw;
         canvas.onpointerup = stopDrawing;
